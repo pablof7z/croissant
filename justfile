@@ -1,0 +1,22 @@
+dev:
+    fd 'go|templ' | entr -r bash -c 'just templ && just tailwind && go build -o ./croissant && godotenv ./croissant'
+
+build cc='musl-gcc' arch='amd64': templ tailwind
+    #!/bin/bash
+
+    # set the global variable `currentVersion` to the latest git tag if we're in it, otherwise use the name of the latest tag + the first 8 characters of the current commit
+    VERSION=$(git describe --tags --exact-match 2>/dev/null || echo "$(git describe --tags --abbrev=0)-$(git rev-parse --short=8 HEAD)")
+
+    # build with musl for maximum compatibility everywhere
+    CC={{cc}} CGO_ENABLED=1 GOARCH={{arch}} GOOS=linux go build -tags=libsecp256k1 -ldflags="-X main.currentVersion=$VERSION -linkmode external -extldflags \"-static\"" -o ./croissant
+
+templ:
+    templ generate
+
+tailwind:
+    ./node_modules/.bin/tailwindcss -i base.css -o static/styles.css
+
+deploy target: build
+    ssh root@{{target}} 'systemctl stop croissant'
+    scp croissant {{target}}:croissant/croissant
+    ssh root@{{target}} 'systemctl start croissant'
