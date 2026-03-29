@@ -1,0 +1,119 @@
+package main
+
+templ Home(settings Settings, loggedIn bool) {
+	<!DOCTYPE html>
+	<html>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>croissant</title>
+			<link rel="stylesheet" href="/static/styles.css"/>
+			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+		</head>
+		<body class="p-6">
+			<main class="max-w-xl space-y-6">
+				<div class="flex items-center justify-between">
+					<h1 class="text-lg font-semibold">croissant</h1>
+					<div x-data="authButton()">
+						<button
+							@click="handleAuth($event)"
+							class="px-3 py-1 border rounded text-sm"
+						>
+							if loggedIn {
+								logout
+							} else {
+								login
+							}
+						</button>
+					</div>
+				</div>
+				if !loggedIn {
+					<p class="text-sm text-stone-700">this is a croissant instance</p>
+				} else {
+					<form method="POST" action="/settings" class="space-y-4">
+						<label class="block text-sm">
+							<span class="block">relay name</span>
+							<input
+								type="text"
+								name="relay_name"
+								value={ settings.RelayName }
+								class="mt-1 w-full border rounded px-2 py-1"
+							/>
+						</label>
+						<label class="block text-sm">
+							<span class="block">relay description</span>
+							<textarea
+								name="relay_description"
+								rows="3"
+								class="mt-1 w-full border rounded px-2 py-1"
+							>{ settings.RelayDescription }</textarea>
+						</label>
+						<label class="block text-sm">
+							<span class="block">relay contact</span>
+							<input
+								type="text"
+								name="relay_contact"
+								value={ settings.RelayContact }
+								class="mt-1 w-full border rounded px-2 py-1"
+							/>
+						</label>
+						<label class="block text-sm">
+							<span class="block">relay icon</span>
+							<input
+								type="text"
+								name="relay_icon"
+								value={ settings.RelayIcon }
+								class="mt-1 w-full border rounded px-2 py-1"
+							/>
+						</label>
+						<label class="block text-sm">
+							<span class="block">owner pubkey</span>
+							<input
+								type="text"
+								name="owner_pubkey"
+								value={ settings.OwnerPubKey.Hex() }
+								class="mt-1 w-full border rounded px-2 py-1 font-mono text-xs"
+							/>
+						</label>
+						<button type="submit" class="px-3 py-1 border rounded text-sm">
+							save
+						</button>
+					</form>
+				}
+			</main>
+			<script>
+				function authButton() {
+					return {
+						setCookie(name, value) {
+							document.cookie = `${name}=${value}; path=/; max-age=34560000`;
+						},
+						clearCookie(name) {
+							document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+						},
+						async handleAuth(event) {
+							const isLogin = event.target.innerText.toLowerCase() === 'login';
+							if (isLogin) {
+								try {
+									const signed = await window.nostr.signEvent({
+										created_at: Math.round(Date.now() / 1000),
+										kind: 27235,
+										tags: [['domain', location.host]],
+										content: ''
+									});
+									this.setCookie('nip98', btoa(JSON.stringify(signed)));
+								} catch (e) {
+									console.error('login failed:', e);
+									return;
+								}
+							} else {
+								this.clearCookie('nip98');
+							}
+							location.reload();
+						}
+					}
+				}
+			</script>
+		</body>
+		<script src="https://cdn.jsdelivr.net/npm/window.nostr.js/dist/window.nostr.min.js"></script>
+	</html>
+}

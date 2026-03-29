@@ -8,52 +8,47 @@ import (
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/khatru"
-	"github.com/fiatjaf/relay29/groups"
+	"github.com/fiatjaf/croissant/groups"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/rs/zerolog"
 )
 
-var log = zerolog.New(os.Stderr).Output(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Logger()
+var (
+	log            = zerolog.New(os.Stderr).Output(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Logger()
+	currentVersion string
+	S              Env
+	relay          *khatru.Relay
+	settingsState  *SettingsState
+)
 
-type envConfig struct {
-	Host     string
-	Port     string
-	DataPath string
-}
-
-func loadEnv() envConfig {
-	host := os.Getenv("HOST")
-	if host == "" {
-		host = "0.0.0.0"
-	}
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3334"
-	}
-	dataPath := os.Getenv("DATA_PATH")
-	if dataPath == "" {
-		dataPath = "./data"
-	}
-
-	return envConfig{Host: host, Port: port, DataPath: dataPath}
+type Env struct {
+	Host     string `envconfig:"HOST" default:"127.0.0.1"`
+	Port     string `envconfig:"PORT" default:"9888"`
+	DataPath string `envconfig:"DATAPATH" default:"data"`
 }
 
 func main() {
-	cfg := loadEnv()
+	err := envconfig.Process("", &S)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error loading environment configuration")
+	}
 
-	settings, err := loadSettings(cfg.DataPath)
+	settings, err := loadSettings(S.DataPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load settings")
 	}
 
-	manager, store, err := initStore(cfg.DataPath)
+	settingsState = &SettingsState{settings: settings}
+
+	manager, store, err := initStore(S.DataPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize store")
 	}
 	defer manager.Close()
 
-	relayBaseURL := relayBaseURL(settings, cfg.Host, cfg.Port)
+	relayBaseURL := relayBaseURL(settings, S.Host, S.Port)
 
-	relay := khatru.NewRelay()
+	relay = khatru.NewRelay()
 	relay.ServiceURL = relayBaseURL
 	relay.Info.Name = settings.RelayName
 	relay.Info.Description = settings.RelayDescription
@@ -66,7 +61,7 @@ func main() {
 
 	relay.UseEventstore(store, 1000)
 
-	relayURL := relayWSURL(settings, cfg.Host, cfg.Port)
+	relayURL := relayWSURL(settings, S.Host, S.Port)
 
 	groups.Init(groups.Options{
 		DB:        store,
@@ -95,8 +90,21 @@ func main() {
 
 	mux := relay.Router()
 	groups.SetupHTTP(mux)
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		settingsState.mu.RLock()
+		currentSettings := settingsState.settings
+		settingsState.mu.RUnlock()
 
-	addr := net.JoinHostPort(cfg.Host, cfg.Port)
+		loggedPubKey, ok := getLoggedUser(r, currentSettings)
+		isOwner := ok && currentSettings.OwnerPubKey != nostr.ZeroPK && loggedPubKey == currentSettings.OwnerPubKey
+		if err := Home(currentSettings, isOwner).Render(r.Context(), w); err != nil {
+			log.Error().Err(err).Msg("failed to render home")
+		}
+	})
+	mux.HandleFunc("GET /settings", settingsHandler)
+
+	addr := net.JoinHostPort(S.Host, S.Port)
 	log.Printf("listening on %s", addr)
 	if err := http.ListenAndServe(addr, relay); err != nil {
 		log.Fatal().Err(err).Msg("server error")

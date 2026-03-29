@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"fiatjaf.com/nostr"
 )
@@ -17,6 +19,7 @@ type Settings struct {
 	RelayContact     string          `json:"relay_contact"`
 	RelayIcon        string          `json:"relay_icon"`
 	RelaySecretKey   nostr.SecretKey `json:"relay_secret_key"`
+	OwnerPubKey      nostr.PubKey    `json:"owner_pubkey"`
 
 	Groups struct {
 		LiveKitServerURL string `json:"livekit_server_url"`
@@ -58,8 +61,8 @@ func loadSettings(dataPath string) (Settings, error) {
 		}
 
 		settings := Settings{
-			RelayName:        "relay29",
-			RelayDescription: "nostr relay",
+			RelayName:        "croissant",
+			RelayDescription: "groups provider",
 			RelayIcon:        "",
 			RelaySecretKey:   nostr.Generate(),
 		}
@@ -76,8 +79,15 @@ func loadSettings(dataPath string) (Settings, error) {
 		return Settings{}, fmt.Errorf("failed to parse settings: %w", err)
 	}
 
-	if settings.RelaySecretKey == nostr.ZeroSecretKey {
+	if settings.RelaySecretKey == [32]byte{} {
 		settings.RelaySecretKey = nostr.Generate()
+		if err := saveSettings(dataPath, settings); err != nil {
+			return Settings{}, err
+		}
+	}
+
+	if settings.OwnerPubKey == nostr.ZeroPK {
+		settings.OwnerPubKey = settings.RelaySecretKey.Public()
 		if err := saveSettings(dataPath, settings); err != nil {
 			return Settings{}, err
 		}
@@ -97,4 +107,61 @@ func saveSettings(dataPath string, settings Settings) error {
 	}
 
 	return nil
+}
+
+type SettingsState struct {
+	mu       sync.RWMutex
+	settings Settings
+}
+
+func settingsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	settingsState.mu.RLock()
+	currentSettings := settingsState.settings
+	settingsState.mu.RUnlock()
+
+	loggedPubKey, ok := getLoggedUser(r, currentSettings)
+	if !ok || loggedPubKey != currentSettings.OwnerPubKey {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+
+	updated := currentSettings
+	updated.RelayName = strings.TrimSpace(r.FormValue("relay_name"))
+	updated.RelayDescription = strings.TrimSpace(r.FormValue("relay_description"))
+	updated.RelayContact = strings.TrimSpace(r.FormValue("relay_contact"))
+	updated.RelayIcon = strings.TrimSpace(r.FormValue("relay_icon"))
+
+	if ownerInput := strings.TrimSpace(r.FormValue("owner_pubkey")); ownerInput != "" {
+		if pk, ok := pubKeyFromInput(ownerInput); ok {
+			updated.OwnerPubKey = pk
+		} else {
+			http.Error(w, "invalid owner pubkey", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if err := saveSettings(S.DataPath, updated); err != nil {
+		http.Error(w, "failed to save settings", http.StatusInternalServerError)
+		return
+	}
+
+	settingsState.mu.Lock()
+	settingsState.settings = updated
+	settingsState.mu.Unlock()
+	relay.Info.Name = updated.RelayName
+	relay.Info.Description = updated.RelayDescription
+	relay.Info.Contact = updated.RelayContact
+	relay.Info.Icon = updated.RelayIcon
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
