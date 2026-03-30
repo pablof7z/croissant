@@ -108,3 +108,41 @@ func (s *GroupsState) rangeGroups(fn func(string, *Group) bool) {
 		}
 	}
 }
+
+type GroupInfo struct {
+	ID      string
+	Name    string
+	Owner   nostr.PubKey
+	Private bool
+}
+
+func (s *GroupsState) GetAllGroups() []GroupInfo {
+	var result []GroupInfo
+	s.rangeGroups(func(id string, group *Group) bool {
+		group.mu.RLock()
+		defer group.mu.RUnlock()
+
+		// Get the owner (admin role members)
+		var owner nostr.PubKey
+		for pk, roles := range group.Members {
+			for _, role := range roles {
+				if role.Name == primaryRoleName {
+					owner = pk
+					break
+				}
+			}
+			if owner != nostr.ZeroPK {
+				break
+			}
+		}
+
+		result = append(result, GroupInfo{
+			ID:      id,
+			Name:    group.Name,
+			Owner:   owner,
+			Private: group.Private,
+		})
+		return true
+	})
+	return result
+}

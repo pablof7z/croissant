@@ -115,11 +115,6 @@ type SettingsState struct {
 }
 
 func settingsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	settingsState.mu.RLock()
 	currentSettings := settingsState.settings
 	settingsState.mu.RUnlock()

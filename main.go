@@ -2,22 +2,28 @@ package main
 
 import (
 	"context"
+	"embed"
 	"net"
 	"net/http"
 	"os"
 
 	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/eventstore/mmm"
 	"fiatjaf.com/nostr/khatru"
 	"github.com/fiatjaf/croissant/groups"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/rs/zerolog"
 )
 
+//go:embed static
+var staticFiles embed.FS
+
 var (
 	log            = zerolog.New(os.Stderr).Output(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Logger()
 	currentVersion string
 	S              Env
 	relay          *khatru.Relay
+	store          *mmm.IndexingLayer
 	settingsState  *SettingsState
 )
 
@@ -40,7 +46,8 @@ func main() {
 
 	settingsState = &SettingsState{settings: settings}
 
-	manager, store, err := initStore(S.DataPath)
+	manager, storeInstance, err := initStore(S.DataPath)
+	store = storeInstance
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize store")
 	}
@@ -90,7 +97,9 @@ func main() {
 
 	mux := relay.Router()
 	groups.SetupHTTP(mux)
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	mux.HandleFunc("GET /favicon.ico", faviconHandler)
+	mux.Handle("GET /static/", http.FileServer(http.FS(staticFiles)))
+	mux.HandleFunc("POST /settings", settingsHandler)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		settingsState.mu.RLock()
 		currentSettings := settingsState.settings
@@ -98,11 +107,18 @@ func main() {
 
 		loggedPubKey, ok := getLoggedUser(r, currentSettings)
 		isOwner := ok && currentSettings.OwnerPubKey != nostr.ZeroPK && loggedPubKey == currentSettings.OwnerPubKey
-		if err := Home(currentSettings, isOwner).Render(r.Context(), w); err != nil {
+
+		var groupList []groups.GroupInfo
+		var relayStats RelayStats
+		if isOwner {
+			groupList = groups.State.GetAllGroups()
+			relayStats = getRelayStats()
+		}
+
+		if err := Home(currentSettings, isOwner, groupList, relayStats).Render(r.Context(), w); err != nil {
 			log.Error().Err(err).Msg("failed to render home")
 		}
 	})
-	mux.HandleFunc("GET /settings", settingsHandler)
 
 	addr := net.JoinHostPort(S.Host, S.Port)
 	log.Printf("listening on %s", addr)
@@ -133,4 +149,26 @@ func relayWSURL(settings Settings, host string, port string) string {
 	}
 
 	return "ws://" + net.JoinHostPort(host, port)
+}
+
+type RelayStats struct {
+	EventCount          uint32
+	ConnectedClients    int
+	ActiveSubscriptions int
+}
+
+func getRelayStats() RelayStats {
+	clients, listeners := relay.Stats()
+
+	count, err := store.CountEvents(nostr.Filter{})
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to count events")
+		count = 0
+	}
+
+	return RelayStats{
+		EventCount:          count,
+		ConnectedClients:    clients,
+		ActiveSubscriptions: listeners,
+	}
 }

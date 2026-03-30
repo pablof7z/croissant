@@ -1,84 +1,175 @@
 package main
 
-templ Home(settings Settings, loggedIn bool) {
+import (
+	"fmt"
+
+	"fiatjaf.com/nostr"
+	"github.com/fiatjaf/croissant/groups"
+)
+
+templ Home(settings Settings, loggedIn bool, groupList []groups.GroupInfo, relayStats RelayStats) {
 	<!DOCTYPE html>
 	<html>
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>croissant</title>
+			<title>{ settings.RelayName }</title>
 			<link rel="stylesheet" href="/static/styles.css"/>
+			<script type="module" src="https://esm.sh/@nostr-technology/nostr-name"></script>
 			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 		</head>
-		<body class="p-6">
-			<main class="max-w-xl space-y-6">
-				<div class="flex items-center justify-between">
-					<h1 class="text-lg font-semibold">croissant</h1>
-					<div x-data="authButton()">
-						<button
-							@click="handleAuth($event)"
-							class="px-3 py-1 border rounded text-sm"
-						>
-							if loggedIn {
-								logout
+		<body class="min-h-screen bg-stone-50 p-4 sm:p-8">
+			<main class="max-w-lg mx-auto">
+				<header class="mb-8">
+					<div class="flex items-center justify-between">
+						<div class="flex items-center gap-3">
+							if settings.RelayIcon != "" {
+								<img src={ settings.RelayIcon } class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
 							} else {
-								login
+								<img src="/static/logo.png" class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
 							}
-						</button>
+							<h1 class="text-xl font-semibold text-stone-800">{ settings.RelayName }</h1>
+						</div>
+						<div x-data="authButton()">
+							<button
+								@click="handleAuth($event)"
+								class="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors duration-150"
+							>
+								if loggedIn {
+									logout
+								} else {
+									login
+								}
+							</button>
+						</div>
 					</div>
-				</div>
+				</header>
 				if !loggedIn {
-					<p class="text-sm text-stone-700">this is a croissant instance</p>
+					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
+						if settings.RelayDescription != "" {
+							<p class="text-stone-600">{ settings.RelayDescription }</p>
+						}
+						if settings.RelayContact != "" {
+							<p class="text-sm text-stone-500">
+								<span class="font-medium">Contact:</span> { settings.RelayContact }
+							</p>
+						}
+						<p class="text-sm text-stone-400 pt-2">Powered by <span class="font-medium text-stone-600">croissant</span></p>
+					</div>
 				} else {
-					<form method="POST" action="/settings" class="space-y-4">
-						<label class="block text-sm">
-							<span class="block">relay name</span>
+					<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+						<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
+							<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", relayStats.EventCount) }</div>
+							<div class="text-sm text-stone-500">Events</div>
+						</div>
+						<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
+							<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", relayStats.ConnectedClients) }</div>
+							<div class="text-sm text-stone-500">Connected Clients</div>
+						</div>
+						<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
+							<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", relayStats.ActiveSubscriptions) }</div>
+							<div class="text-sm text-stone-500">Active Subscriptions</div>
+						</div>
+					</div>
+					<form method="POST" action="/settings" class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-6">
+						<h2 class="text-lg font-semibold text-stone-800 mb-6">Relay Settings</h2>
+						<div>
+							<label class="block text-sm font-medium text-stone-700 mb-1.5">Relay Name</label>
 							<input
 								type="text"
 								name="relay_name"
 								value={ settings.RelayName }
-								class="mt-1 w-full border rounded px-2 py-1"
+								class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
 							/>
-						</label>
-						<label class="block text-sm">
-							<span class="block">relay description</span>
+						</div>
+						<div>
+							<label class="block text-sm font-medium text-stone-700 mb-1.5">Relay Description</label>
 							<textarea
 								name="relay_description"
 								rows="3"
-								class="mt-1 w-full border rounded px-2 py-1"
+								class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150 resize-none"
 							>{ settings.RelayDescription }</textarea>
-						</label>
-						<label class="block text-sm">
-							<span class="block">relay contact</span>
+						</div>
+						<div>
+							<label class="block text-sm font-medium text-stone-700 mb-1.5">Relay Contact</label>
 							<input
 								type="text"
 								name="relay_contact"
 								value={ settings.RelayContact }
-								class="mt-1 w-full border rounded px-2 py-1"
+								class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
 							/>
-						</label>
-						<label class="block text-sm">
-							<span class="block">relay icon</span>
+						</div>
+						<div>
+							<label class="block text-sm font-medium text-stone-700 mb-1.5">Relay Icon URL</label>
 							<input
 								type="text"
 								name="relay_icon"
 								value={ settings.RelayIcon }
-								class="mt-1 w-full border rounded px-2 py-1"
+								placeholder="https://example.com/icon.png"
+								class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
 							/>
-						</label>
-						<label class="block text-sm">
-							<span class="block">owner pubkey</span>
+						</div>
+						<div>
+							<label class="block text-sm font-medium text-stone-700 mb-1.5">Owner Pubkey</label>
 							<input
 								type="text"
 								name="owner_pubkey"
 								value={ settings.OwnerPubKey.Hex() }
-								class="mt-1 w-full border rounded px-2 py-1 font-mono text-xs"
+								readonly
+								class="w-full px-4 py-2.5 border border-stone-200 rounded-lg font-mono text-xs text-stone-500 bg-stone-50 cursor-not-allowed"
 							/>
-						</label>
-						<button type="submit" class="px-3 py-1 border rounded text-sm">
-							save
-						</button>
+						</div>
+						<div class="pt-4">
+							<button type="submit" class="cursor-pointer w-full sm:w-auto px-6 py-2.5 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors duration-150 shadow-sm">
+								Save Changes
+							</button>
+						</div>
 					</form>
+				}
+				if len(groupList) > 0 {
+					<div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden mt-8">
+						<div class="px-6 py-4 border-b border-stone-100">
+							<h2 class="text-lg font-semibold text-stone-800">Groups</h2>
+						</div>
+						<div class="overflow-x-auto">
+							<table class="w-full">
+								<thead class="bg-stone-50">
+									<tr>
+										<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Name</th>
+										<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Owner</th>
+										<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Status</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-stone-100">
+									for _, group := range groupList {
+										<tr class="hover:bg-stone-50 transition-colors">
+											<td class="px-6 py-4">
+												<span class="text-stone-800 font-medium">{ group.Name }</span>
+												<br/>
+												<span class="text-xs text-stone-400 font-mono">{ group.ID }</span>
+											</td>
+											<td class="px-6 py-4">
+												if group.Owner != nostr.ZeroPK {
+													<nostr-name pubkey={ group.Owner.Hex() }></nostr-name>
+													<br/>
+													<a href={ "https://njump.me/" + group.Owner.Hex() } target="_blank" class="text-xs text-stone-400 hover:text-stone-600 transition-colors">profile</a>
+												} else {
+													<span class="text-stone-400 text-sm">unknown</span>
+												}
+											</td>
+											<td class="px-6 py-4">
+												if group.Private {
+													<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">private</span>
+												} else {
+													<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">public</span>
+												}
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
 				}
 			</main>
 			<script>

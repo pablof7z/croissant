@@ -15,6 +15,7 @@ require (
 	buf.build/go/protovalidate v1.1.0 // indirect
 	buf.build/go/protoyaml v0.6.0 // indirect
 	cel.dev/expr v0.25.1 // indirect
+	fiatjaf.com/lib v0.3.6 // indirect
 	github.com/ImVexed/fasturl v0.0.0-20230304231329-4e41488060f3 // indirect
 	github.com/PowerDNS/lmdb-go v1.9.3 // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
@@ -119,3 +120,5 @@ require (
 )
 
 replace github.com/livekit/livekit-server => github.com/livekit/livekit-server v1.9.11
+
+replace fiatjaf.com/nostr => ../nostrlib
