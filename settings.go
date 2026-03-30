@@ -3,14 +3,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"fiatjaf.com/nostr"
 )
+
+var settings Settings
 
 type Settings struct {
 	Domain           string          `json:"domain"`
@@ -44,6 +46,30 @@ func (s Settings) WSScheme() string {
 	return "ws" + s.HTTPScheme()[4:]
 }
 
+func (s Settings) relayBaseURL(host string, port string) string {
+	if s.Domain != "" {
+		return s.HTTPScheme() + s.Domain
+	}
+
+	if host == "0.0.0.0" || host == "::" {
+		host = "localhost"
+	}
+
+	return "http://" + net.JoinHostPort(host, port)
+}
+
+func (s Settings) relayWSURL(host string, port string) string {
+	if s.Domain != "" {
+		return s.WSScheme() + s.Domain
+	}
+
+	if host == "0.0.0.0" || host == "::" {
+		host = "localhost"
+	}
+
+	return "ws://" + net.JoinHostPort(host, port)
+}
+
 func settingsPath(dataPath string) string {
 	return filepath.Join(dataPath, "settings.json")
 }
@@ -67,7 +93,7 @@ func loadSettings(dataPath string) (Settings, error) {
 			RelaySecretKey:   nostr.Generate(),
 		}
 
-		if err := saveSettings(dataPath, settings); err != nil {
+		if err := settings.save(dataPath); err != nil {
 			return Settings{}, err
 		}
 
@@ -81,14 +107,14 @@ func loadSettings(dataPath string) (Settings, error) {
 
 	if settings.RelaySecretKey == [32]byte{} {
 		settings.RelaySecretKey = nostr.Generate()
-		if err := saveSettings(dataPath, settings); err != nil {
+		if err := settings.save(dataPath); err != nil {
 			return Settings{}, err
 		}
 	}
 
 	if settings.OwnerPubKey == nostr.ZeroPK {
 		settings.OwnerPubKey = settings.RelaySecretKey.Public()
-		if err := saveSettings(dataPath, settings); err != nil {
+		if err := settings.save(dataPath); err != nil {
 			return Settings{}, err
 		}
 	}
@@ -96,7 +122,7 @@ func loadSettings(dataPath string) (Settings, error) {
 	return settings, nil
 }
 
-func saveSettings(dataPath string, settings Settings) error {
+func (settings Settings) save(dataPath string) error {
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to serialize settings: %w", err)
@@ -109,18 +135,9 @@ func saveSettings(dataPath string, settings Settings) error {
 	return nil
 }
 
-type SettingsState struct {
-	mu       sync.RWMutex
-	settings Settings
-}
-
 func settingsHandler(w http.ResponseWriter, r *http.Request) {
-	settingsState.mu.RLock()
-	currentSettings := settingsState.settings
-	settingsState.mu.RUnlock()
-
-	loggedPubKey, ok := getLoggedUser(r, currentSettings)
-	if !ok || loggedPubKey != currentSettings.OwnerPubKey {
+	loggedPubKey, ok := getLoggedUser(r)
+	if !ok || loggedPubKey != settings.OwnerPubKey {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -130,7 +147,7 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated := currentSettings
+	updated := settings
 	updated.RelayName = strings.TrimSpace(r.FormValue("relay_name"))
 	updated.RelayDescription = strings.TrimSpace(r.FormValue("relay_description"))
 	updated.RelayContact = strings.TrimSpace(r.FormValue("relay_contact"))
@@ -145,14 +162,12 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := saveSettings(S.DataPath, updated); err != nil {
+	if err := settings.save(S.DataPath); err != nil {
 		http.Error(w, "failed to save settings", http.StatusInternalServerError)
 		return
 	}
 
-	settingsState.mu.Lock()
-	settingsState.settings = updated
-	settingsState.mu.Unlock()
+	settings = updated
 	relay.Info.Name = updated.RelayName
 	relay.Info.Description = updated.RelayDescription
 	relay.Info.Contact = updated.RelayContact

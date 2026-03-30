@@ -2,12 +2,21 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 
 	"fiatjaf.com/nostr"
 	"github.com/fiatjaf/croissant/groups"
 )
 
-templ Home(settings Settings, loggedIn bool, groupList []groups.GroupInfo, relayStats RelayStats) {
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	logged, _ := getLoggedUser(r)
+
+	if err := home(logged).Render(r.Context(), w); err != nil {
+		L.Error().Err(err).Msg("failed to render home")
+	}
+}
+
+templ home(loggedUser nostr.PubKey) {
 	<!DOCTYPE html>
 	<html>
 		<head>
@@ -35,7 +44,7 @@ templ Home(settings Settings, loggedIn bool, groupList []groups.GroupInfo, relay
 								@click="handleAuth($event)"
 								class="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors duration-150"
 							>
-								if loggedIn {
+								if loggedUser != nostr.ZeroPK {
 									logout
 								} else {
 									login
@@ -44,33 +53,25 @@ templ Home(settings Settings, loggedIn bool, groupList []groups.GroupInfo, relay
 						</div>
 					</div>
 				</header>
-				if !loggedIn {
-					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
-						if settings.RelayDescription != "" {
-							<p class="text-stone-600">{ settings.RelayDescription }</p>
-						}
-						if settings.RelayContact != "" {
-							<p class="text-sm text-stone-500">
-								<span class="font-medium">Contact:</span> { settings.RelayContact }
-							</p>
-						}
-						<p class="text-sm text-stone-400 pt-2">Powered by <span class="font-medium text-stone-600">croissant</span></p>
+				{{
+					groupList := groups.State.GetAllGroups()
+					clients, listeners := relay.Stats()
+				}}
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
+						<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", len(groupList)) }</div>
+						<div class="text-sm text-stone-500">Groups</div>
 					</div>
-				} else {
-					<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-						<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-							<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", relayStats.EventCount) }</div>
-							<div class="text-sm text-stone-500">Events</div>
-						</div>
-						<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-							<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", relayStats.ConnectedClients) }</div>
-							<div class="text-sm text-stone-500">Connected Clients</div>
-						</div>
-						<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-							<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", relayStats.ActiveSubscriptions) }</div>
-							<div class="text-sm text-stone-500">Active Subscriptions</div>
-						</div>
+					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
+						<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", clients) }</div>
+						<div class="text-sm text-stone-500">Connected Clients</div>
 					</div>
+					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
+						<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", listeners) }</div>
+						<div class="text-sm text-stone-500">Active Subscriptions</div>
+					</div>
+				</div>
+				if loggedUser == settings.OwnerPubKey {
 					<form method="POST" action="/settings" class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-6">
 						<h2 class="text-lg font-semibold text-stone-800 mb-6">Relay Settings</h2>
 						<div>
@@ -172,6 +173,17 @@ templ Home(settings Settings, loggedIn bool, groupList []groups.GroupInfo, relay
 					</div>
 				}
 			</main>
+			<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
+				if settings.RelayDescription != "" {
+					<p class="text-stone-600">{ settings.RelayDescription }</p>
+				}
+				if settings.RelayContact != "" {
+					<p class="text-sm text-stone-500">
+						<span class="font-medium">Contact:</span> { settings.RelayContact }
+					</p>
+				}
+				<p class="text-sm text-stone-400 pt-2">Powered by <span class="font-medium text-stone-600">croissant</span></p>
+			</div>
 			<script>
 				function authButton() {
 					return {

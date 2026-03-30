@@ -12,7 +12,7 @@ import (
 
 const nip98CookieName = "nip98"
 
-func getLoggedUser(r *http.Request, settings Settings) (nostr.PubKey, bool) {
+func getLoggedUser(r *http.Request) (nostr.PubKey, bool) {
 	cookie, err := r.Cookie(nip98CookieName)
 	if err != nil || cookie == nil || cookie.Value == "" {
 		return nostr.ZeroPK, false

@@ -25,9 +25,7 @@ type faviconCache struct {
 }
 
 func faviconHandler(w http.ResponseWriter, r *http.Request) {
-	settingsState.mu.RLock()
-	iconURL := settingsState.settings.RelayIcon
-	settingsState.mu.RUnlock()
+	iconURL := settings.RelayIcon
 
 	data, contentType := faviconStore.get(iconURL)
 	if len(data) == 0 {
@@ -56,7 +54,7 @@ func (c *faviconCache) get(iconURL string) ([]byte, string) {
 
 	data, contentType, err := c.fetch(iconURL)
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to fetch relay icon")
+		L.Warn().Err(err).Msg("failed to fetch relay icon")
 		return c.logo()
 	}
 
@@ -74,7 +72,7 @@ func (c *faviconCache) logo() ([]byte, string) {
 
 	data, err := staticFiles.ReadFile("static/logo.png")
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to read embedded logo")
+		L.Warn().Err(err).Msg("failed to read embedded logo")
 		return nil, ""
 	}
 

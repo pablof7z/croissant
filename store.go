@@ -12,7 +12,7 @@ func initStore(dataPath string) (*mmm.MultiMmapManager, *mmm.IndexingLayer, erro
 		return nil, nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	mmmlogger := log.With().Str("", "mmm").Logger()
+	mmmlogger := L.With().Str("", "mmm").Logger()
 	manager := &mmm.MultiMmapManager{
 		Dir:    dataPath,
 		Logger: &mmmlogger,
