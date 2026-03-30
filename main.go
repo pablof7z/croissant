@@ -80,6 +80,7 @@ func main() {
 	mux.HandleFunc("GET /favicon.ico", faviconHandler)
 	mux.Handle("GET /static/", http.FileServer(http.FS(staticFiles)))
 	mux.HandleFunc("POST /settings", global.SettingsHandler)
+	mux.HandleFunc("GET /group/{id}", groupHandler)
 	mux.HandleFunc("GET /", homeHandler)
 
 	addr := net.JoinHostPort(global.E.Host, global.E.Port)

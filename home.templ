@@ -144,14 +144,14 @@ templ home(loggedUser nostr.PubKey) {
 									if !group.Hidden  || loggedUser == global.S.OwnerPubKey {
 										<tr class="hover:bg-stone-50 transition-colors">
 											<td class="px-6 py-4">
-												<span class="text-stone-800 font-medium">{ group.Name }</span>
+												<a href={ "/group/" + group.Address.ID } class="text-stone-800 font-medium cursor-pointer">{ group.Name }</a>
 												<br/>
-												<span class="text-xs text-stone-400 font-mono">{ group.Address.ID }</span>
+												<a href={ "/group/" + group.Address.ID } class="text-xs text-stone-400 font-mono cursor-pointer">{ group.Address.ID }</a>
 											</td>
 											<td class="px-6 py-4">
 												for admin, role := range group.Members {
 													if role != nil {
-														<a href={ "https://njump.me/" + admin.Hex() } target="_blank" class="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+														<a href={ "https://njump.me/" + admin.Hex() } target="_blank" class="text-xs text-stone-400 hover:text-stone-600 transition-colors" onclick="event.stopPropagation()">
 															<nostr-name pubkey={ admin.Hex() }></nostr-name>
 														</a>
 													}
@@ -171,7 +171,7 @@ templ home(loggedUser nostr.PubKey) {
 						</table>
 					</div>
 				</div>
-				<p class="text-sm text-stone-400 mt-16">Powered by <span class="font-medium text-stone-600">croissant</span></p>
+				<p class="text-sm text-stone-400 mt-16">powered by <span class="font-medium text-stone-600">croissant</span></p>
 			</main>
 			<script>
 				function authButton() {
