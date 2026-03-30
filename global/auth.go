@@ -1,4 +1,4 @@
-package main
+package global
 
 import (
 	"encoding/base64"
@@ -12,7 +12,7 @@ import (
 
 const nip98CookieName = "nip98"
 
-func getLoggedUser(r *http.Request) (nostr.PubKey, bool) {
+func GetLoggedUser(r *http.Request) (nostr.PubKey, bool) {
 	cookie, err := r.Cookie(nip98CookieName)
 	if err != nil || cookie == nil || cookie.Value == "" {
 		return nostr.ZeroPK, false
@@ -37,7 +37,7 @@ func getLoggedUser(r *http.Request) (nostr.PubKey, bool) {
 		return nostr.ZeroPK, false
 	}
 
-	expectedDomain := settings.Domain
+	expectedDomain := S.Domain
 	if expectedDomain == "" {
 		expectedDomain = r.Host
 	}

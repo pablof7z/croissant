@@ -69,7 +69,7 @@ func livekitAuthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, ok := State.getGroup(groupId)
+	group, ok := State.GetGroup(groupId)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -163,7 +163,7 @@ func livekitWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, ok := State.getGroup(groupId)
+	group, ok := State.GetGroup(groupId)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -180,7 +180,7 @@ func livekitWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	case webhook.EventParticipantJoined, webhook.EventParticipantLeft:
 		participants, err := State.listLiveKitParticipants(group)
 		if err != nil {
-			logg.Printf("failed to refresh livekit participants: %v", err)
+			L.Printf("failed to refresh livekit participants: %v", err)
 			return
 		}
 

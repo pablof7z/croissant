@@ -1,4 +1,4 @@
-module github.com/fiatjaf/croissant
+module fiatjaf.com/croissant
 
 go 1.25.0
 

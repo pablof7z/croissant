@@ -1,4 +1,4 @@
-package main
+package global
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 	"fiatjaf.com/nostr"
 )
 
-var settings Settings
+var S Settings
 
 type Settings struct {
 	Domain           string          `json:"domain"`
@@ -46,7 +46,7 @@ func (s Settings) WSScheme() string {
 	return "ws" + s.HTTPScheme()[4:]
 }
 
-func (s Settings) relayBaseURL(host string, port string) string {
+func (s Settings) RelayBaseURL(host string, port string) string {
 	if s.Domain != "" {
 		return s.HTTPScheme() + s.Domain
 	}
@@ -58,7 +58,7 @@ func (s Settings) relayBaseURL(host string, port string) string {
 	return "http://" + net.JoinHostPort(host, port)
 }
 
-func (s Settings) relayWSURL(host string, port string) string {
+func (s Settings) RelayWSURL(host string, port string) string {
 	if s.Domain != "" {
 		return s.WSScheme() + s.Domain
 	}
@@ -135,9 +135,9 @@ func (settings Settings) save(dataPath string) error {
 	return nil
 }
 
-func settingsHandler(w http.ResponseWriter, r *http.Request) {
-	loggedPubKey, ok := getLoggedUser(r)
-	if !ok || loggedPubKey != settings.OwnerPubKey {
+func SettingsHandler(w http.ResponseWriter, r *http.Request) {
+	loggedPubKey, ok := GetLoggedUser(r)
+	if !ok || loggedPubKey != S.OwnerPubKey {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -147,7 +147,7 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated := settings
+	updated := S
 	updated.RelayName = strings.TrimSpace(r.FormValue("relay_name"))
 	updated.RelayDescription = strings.TrimSpace(r.FormValue("relay_description"))
 	updated.RelayContact = strings.TrimSpace(r.FormValue("relay_contact"))
@@ -162,16 +162,16 @@ func settingsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := settings.save(S.DataPath); err != nil {
+	if err := S.save(E.DataPath); err != nil {
 		http.Error(w, "failed to save settings", http.StatusInternalServerError)
 		return
 	}
 
-	settings = updated
-	relay.Info.Name = updated.RelayName
-	relay.Info.Description = updated.RelayDescription
-	relay.Info.Contact = updated.RelayContact
-	relay.Info.Icon = updated.RelayIcon
+	S = updated
+	R.Info.Name = updated.RelayName
+	R.Info.Description = updated.RelayDescription
+	R.Info.Contact = updated.RelayContact
+	R.Info.Icon = updated.RelayIcon
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

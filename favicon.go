@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"fiatjaf.com/croissant/global"
 )
 
 const maxFaviconSize = 2 << 20
@@ -25,7 +27,7 @@ type faviconCache struct {
 }
 
 func faviconHandler(w http.ResponseWriter, r *http.Request) {
-	iconURL := settings.RelayIcon
+	iconURL := global.S.RelayIcon
 
 	data, contentType := faviconStore.get(iconURL)
 	if len(data) == 0 {

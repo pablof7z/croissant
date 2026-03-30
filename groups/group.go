@@ -1,7 +1,6 @@
 package groups
 
 import (
-	"fmt"
 	"iter"
 	"sync"
 	"sync/atomic"
@@ -65,7 +64,7 @@ nextgroup:
 			evt := events[i]
 			act, err := nip29.PrepareModerationAction(evt)
 			if err != nil {
-				logg.Printf("invalid moderation action: %v", err)
+				L.Warn().Err(err).Msg("invalid moderation action")
 				continue
 			}
 			act.Apply(&group.Group)
@@ -77,25 +76,21 @@ nextgroup:
 			i--
 		}
 
-		s.setGroup(group.Address.ID, group)
+		s.SetGroup(group.Address.ID, group)
 	}
 
-	s.rangeGroups(func(_ string, group *Group) bool {
-		for updated, err := range s.SyncGroupMetadataEvents(group) {
-			if err != nil {
-				return false
-			}
+	for group := range s.ListGroups() {
+		for updated := range s.SyncGroupMetadataEvents(group) {
 			s.broadcast(updated)
 		}
-		return true
-	})
+	}
 
 	return nil
 }
 
 func (s *GroupsState) GetGroupFromEvent(event nostr.Event) *Group {
 	if gid, ok := getGroupIDFromEvent(event); ok {
-		group, _ := s.getGroup(gid)
+		group, _ := s.GetGroup(gid)
 		return group
 	}
 	return nil
@@ -116,10 +111,10 @@ func getGroupIDFromEvent(event nostr.Event) (string, bool) {
 	return "", false
 }
 
-func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq2[nostr.Event, error] {
+func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event] {
 	now := nostr.Now()
 
-	return func(yield func(nostr.Event, error) bool) {
+	return func(yield func(nostr.Event) bool) {
 		group.mu.RLock()
 		defer group.mu.RUnlock()
 
@@ -133,19 +128,13 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq2[nostr.Even
 				continue
 			}
 
-			if err := event.Sign(s.secretKey); err != nil {
-				if !yield(nostr.Event{}, fmt.Errorf("failed to sign group metadata event %d: %w", event.Kind, err)) {
-					return
-				}
-			}
+			event.Sign(s.secretKey)
 
 			if err := s.DB.ReplaceEvent(event); err != nil {
-				if !yield(nostr.Event{}, fmt.Errorf("failed to save group metadata event %d: %w", event.Kind, err)) {
-					return
-				}
+				L.Error().Int("kind", int(event.Kind.Num())).Err(err).Msg("failed to save group metadata event")
 			}
 			if event.CreatedAt > now-180 {
-				if !yield(event, nil) {
+				if !yield(event) {
 					return
 				}
 			}

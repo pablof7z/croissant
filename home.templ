@@ -5,11 +5,13 @@ import (
 	"net/http"
 
 	"fiatjaf.com/nostr"
-	"github.com/fiatjaf/croissant/groups"
+
+	"fiatjaf.com/croissant/global"
+	"fiatjaf.com/croissant/groups"
 )
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	logged, _ := getLoggedUser(r)
+	logged, _ := global.GetLoggedUser(r)
 
 	if err := home(logged).Render(r.Context(), w); err != nil {
 		L.Error().Err(err).Msg("failed to render home")
@@ -22,9 +24,9 @@ templ home(loggedUser nostr.PubKey) {
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>{ settings.RelayName }</title>
+			<title>{ global.S.RelayName }</title>
 			<link rel="stylesheet" href="/static/styles.css"/>
-			<script type="module" src="https://esm.sh/@nostr-technology/nostr-name"></script>
+			<script src="https://cdn.jsdelivr.net/npm/nostr-web-components/dist/nostr-name.js"></script>
 			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 		</head>
 		<body class="min-h-screen bg-stone-50 p-4 sm:p-8">
@@ -32,12 +34,12 @@ templ home(loggedUser nostr.PubKey) {
 				<header class="mb-8">
 					<div class="flex items-center justify-between">
 						<div class="flex items-center gap-3">
-							if settings.RelayIcon != "" {
-								<img src={ settings.RelayIcon } class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
+							if global.S.RelayIcon != "" {
+								<img src={ global.S.RelayIcon } class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
 							} else {
 								<img src="/static/logo.png" class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
 							}
-							<h1 class="text-xl font-semibold text-stone-800">{ settings.RelayName }</h1>
+							<h1 class="text-xl font-semibold text-stone-800">{ global.S.RelayName }</h1>
 						</div>
 						<div x-data="authButton()">
 							<button
@@ -53,13 +55,10 @@ templ home(loggedUser nostr.PubKey) {
 						</div>
 					</div>
 				</header>
-				{{
-					groupList := groups.State.GetAllGroups()
-					clients, listeners := relay.Stats()
-				}}
+				{{ clients, listeners := global.R.Stats() }}
 				<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
 					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-						<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", len(groupList)) }</div>
+						<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", groups.State.CountGroups()) }</div>
 						<div class="text-sm text-stone-500">Groups</div>
 					</div>
 					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
@@ -71,7 +70,7 @@ templ home(loggedUser nostr.PubKey) {
 						<div class="text-sm text-stone-500">Active Subscriptions</div>
 					</div>
 				</div>
-				if loggedUser == settings.OwnerPubKey {
+				if loggedUser == global.S.OwnerPubKey {
 					<form method="POST" action="/settings" class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-6">
 						<h2 class="text-lg font-semibold text-stone-800 mb-6">Relay Settings</h2>
 						<div>
@@ -79,7 +78,7 @@ templ home(loggedUser nostr.PubKey) {
 							<input
 								type="text"
 								name="relay_name"
-								value={ settings.RelayName }
+								value={ global.S.RelayName }
 								class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
 							/>
 						</div>
@@ -89,14 +88,14 @@ templ home(loggedUser nostr.PubKey) {
 								name="relay_description"
 								rows="3"
 								class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150 resize-none"
-							>{ settings.RelayDescription }</textarea>
+							>{ global.S.RelayDescription }</textarea>
 						</div>
 						<div>
 							<label class="block text-sm font-medium text-stone-700 mb-1.5">Relay Contact</label>
 							<input
 								type="text"
 								name="relay_contact"
-								value={ settings.RelayContact }
+								value={ global.S.RelayContact }
 								class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
 							/>
 						</div>
@@ -105,7 +104,7 @@ templ home(loggedUser nostr.PubKey) {
 							<input
 								type="text"
 								name="relay_icon"
-								value={ settings.RelayIcon }
+								value={ global.S.RelayIcon }
 								placeholder="https://example.com/icon.png"
 								class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
 							/>
@@ -115,7 +114,7 @@ templ home(loggedUser nostr.PubKey) {
 							<input
 								type="text"
 								name="owner_pubkey"
-								value={ settings.OwnerPubKey.Hex() }
+								value={ global.S.OwnerPubKey.Hex() }
 								readonly
 								class="w-full px-4 py-2.5 border border-stone-200 rounded-lg font-mono text-xs text-stone-500 bg-stone-50 cursor-not-allowed"
 							/>
@@ -127,35 +126,35 @@ templ home(loggedUser nostr.PubKey) {
 						</div>
 					</form>
 				}
-				if len(groupList) > 0 {
-					<div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden mt-8">
-						<div class="px-6 py-4 border-b border-stone-100">
-							<h2 class="text-lg font-semibold text-stone-800">Groups</h2>
-						</div>
-						<div class="overflow-x-auto">
-							<table class="w-full">
-								<thead class="bg-stone-50">
-									<tr>
-										<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Name</th>
-										<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Owner</th>
-										<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Status</th>
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-stone-100">
-									for _, group := range groupList {
+				<div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden mt-8">
+					<div class="px-6 py-4 border-b border-stone-100">
+						<h2 class="text-lg font-semibold text-stone-800">Groups</h2>
+					</div>
+					<div class="overflow-x-auto">
+						<table class="w-full">
+							<thead class="bg-stone-50">
+								<tr>
+									<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Name</th>
+									<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Owner</th>
+									<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Status</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-stone-100">
+								for group := range groups.State.ListGroups() {
+									if !group.Hidden  || loggedUser == global.S.OwnerPubKey {
 										<tr class="hover:bg-stone-50 transition-colors">
 											<td class="px-6 py-4">
 												<span class="text-stone-800 font-medium">{ group.Name }</span>
 												<br/>
-												<span class="text-xs text-stone-400 font-mono">{ group.ID }</span>
+												<span class="text-xs text-stone-400 font-mono">{ group.Address.ID }</span>
 											</td>
 											<td class="px-6 py-4">
-												if group.Owner != nostr.ZeroPK {
-													<nostr-name pubkey={ group.Owner.Hex() }></nostr-name>
-													<br/>
-													<a href={ "https://njump.me/" + group.Owner.Hex() } target="_blank" class="text-xs text-stone-400 hover:text-stone-600 transition-colors">profile</a>
-												} else {
-													<span class="text-stone-400 text-sm">unknown</span>
+												for admin, role := range group.Members {
+													if role != nil {
+														<a href={ "https://njump.me/" + admin.Hex() } target="_blank" class="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+															<nostr-name pubkey={ admin.Hex() }></nostr-name>
+														</a>
+													}
 												}
 											</td>
 											<td class="px-6 py-4">
@@ -167,23 +166,13 @@ templ home(loggedUser nostr.PubKey) {
 											</td>
 										</tr>
 									}
-								</tbody>
-							</table>
-						</div>
+								}
+							</tbody>
+						</table>
 					</div>
-				}
+				</div>
+				<p class="text-sm text-stone-400 mt-16">Powered by <span class="font-medium text-stone-600">croissant</span></p>
 			</main>
-			<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
-				if settings.RelayDescription != "" {
-					<p class="text-stone-600">{ settings.RelayDescription }</p>
-				}
-				if settings.RelayContact != "" {
-					<p class="text-sm text-stone-500">
-						<span class="font-medium">Contact:</span> { settings.RelayContact }
-					</p>
-				}
-				<p class="text-sm text-stone-400 pt-2">Powered by <span class="font-medium text-stone-600">croissant</span></p>
-			</div>
 			<script>
 				function authButton() {
 					return {

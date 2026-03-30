@@ -11,12 +11,12 @@ func (s *GroupsState) ProcessEvent(event nostr.Event) (groupsAffected []*Group) 
 		if event.Kind == nostr.KindSimpleGroupCreateGroup {
 			groupId, ok := getGroupIDFromEvent(event)
 			if !ok {
-				logg.Printf("event without a group id")
+				L.Warn().Stringer("event", event).Msg("failed to get group from event")
 				return nil
 			}
 
 			group = s.NewGroup(groupId)
-			s.setGroup(groupId, group)
+			s.SetGroup(groupId, group)
 			groupsAffected = nostr.AppendUnique(groupsAffected, group)
 		} else {
 			group = s.GetGroupFromEvent(event)
@@ -37,14 +37,14 @@ func (s *GroupsState) ProcessEvent(event nostr.Event) (groupsAffected []*Group) 
 					continue
 				}
 				if err := s.DB.DeleteEvent(id); err != nil {
-					logg.Printf("failed to delete event: %v", err)
+					L.Warn().Err(err).Stringer("deletion", event).Str("target", id.Hex()).Msg("failed to delete event")
 				} else {
 					idx := s.deletedCacheIndex.Add(1) % uint32(len(s.deletedCache))
 					s.deletedCache[idx] = id
 				}
 			}
 		} else if event.Kind == nostr.KindSimpleGroupDeleteGroup {
-			s.deleteGroup(group.Address.ID)
+			s.DeleteGroup(group.Address.ID)
 		}
 	}
 
