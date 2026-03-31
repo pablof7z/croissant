@@ -1,4 +1,4 @@
-package groups
+package main
 
 import (
 	"iter"
@@ -76,10 +76,10 @@ nextgroup:
 			i--
 		}
 
-		s.SetGroup(group.Address.ID, group)
+		s.Groups.Store(group.Address.ID, group)
 	}
 
-	for group := range s.ListGroups() {
+	for _, group := range s.Groups.Range {
 		for updated := range s.SyncGroupMetadataEvents(group) {
 			s.broadcast(updated)
 		}
@@ -90,7 +90,7 @@ nextgroup:
 
 func (s *GroupsState) GetGroupFromEvent(event nostr.Event) *Group {
 	if gid, ok := getGroupIDFromEvent(event); ok {
-		group, _ := s.GetGroup(gid)
+		group, _ := s.Groups.Load(gid)
 		return group
 	}
 	return nil
@@ -140,4 +140,16 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event
 			}
 		}
 	}
+}
+
+func (g *Group) AnyOfTheseIsAMember(pubkeys []nostr.PubKey) bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	for _, pk := range pubkeys {
+		if _, isMember := g.Members[pk]; isMember {
+			return true
+		}
+	}
+	return false
 }

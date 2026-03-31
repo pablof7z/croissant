@@ -1,4 +1,4 @@
-package groups
+package main
 
 import (
 	"bytes"
@@ -33,12 +33,6 @@ type liveKitListParticipantsResponse struct {
 	} `json:"participants"`
 }
 
-func SetupHTTP(mux *http.ServeMux) {
-	mux.HandleFunc("GET /.well-known/nip29/livekit", livekitStatusHandler)
-	mux.HandleFunc("GET /.well-known/nip29/livekit/{groupId}", livekitAuthHandler)
-	mux.HandleFunc("POST /groups/livekit/webhook", livekitWebhookHandler)
-}
-
 func livekitStatusHandler(w http.ResponseWriter, r *http.Request) {
 	if State == nil {
 		http.NotFound(w, r)
@@ -69,7 +63,7 @@ func livekitAuthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, ok := State.GetGroup(groupId)
+	group, ok := State.Groups.Load(groupId)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -163,7 +157,7 @@ func livekitWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	group, ok := State.GetGroup(groupId)
+	group, ok := State.Groups.Load(groupId)
 	if !ok {
 		http.NotFound(w, r)
 		return

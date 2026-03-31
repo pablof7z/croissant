@@ -9,8 +9,6 @@ import (
 	"fiatjaf.com/nostr/nip19"
 
 	"fiatjaf.com/croissant/global"
-	"fiatjaf.com/croissant/groups"
-	"fiatjaf.com/nostr/nip29"
 )
 
 type groupMemberView struct {
@@ -38,24 +36,20 @@ type groupPageView struct {
 
 func groupHandler(w http.ResponseWriter, r *http.Request) {
 	groupID := r.PathValue("id")
-	group, ok := groups.State.GetGroup(groupID)
+	group, ok := State.Groups.Load(groupID)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 
-	count, err := groups.State.DB.CountEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}})
+	count, err := State.DB.CountEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}})
 	if err != nil {
 		L.Warn().Err(err).Str("group", group.Address.ID).Msg("failed to count group events")
 	}
 
-	lastEventText := "(no events yet)"
-	for event := range groups.State.DB.QueryEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}, Limit: 1}, 1) {
-		if nip29.ModerationEventKinds.Includes(event.Kind) {
-			continue
-		}
-
-		lastEventText = time.Unix(int64(event.CreatedAt), 0).Format("Jan 2, 2006 15:04 MST")
+	lastEventText := ""
+	for event := range State.DB.QueryEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}, Limit: 1}, 1) {
+		lastEventText = time.Unix(int64(event.CreatedAt), 0).Format("Jan 2, 2006; 15:04")
 		break
 	}
 
@@ -71,7 +65,7 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-templ groupPage(group *groups.Group, count uint32, lastEventText string, naddr string) {
+templ groupPage(group *Group, count uint32, lastEventText string, naddr string) {
 	<!DOCTYPE html>
 	<html>
 		<head>
@@ -139,7 +133,7 @@ templ groupPage(group *groups.Group, count uint32, lastEventText string, naddr s
 						<div class="text-sm text-stone-500">Events</div>
 					</div>
 					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-						<div class="text-2xl font-semibold text-stone-700">{ lastEventText }</div>
+						<div class="text-sm font-semibold text-stone-700">{ lastEventText }</div>
 						<div class="text-sm text-stone-500">Last Event</div>
 					</div>
 				</div>
@@ -182,15 +176,16 @@ templ groupPage(group *groups.Group, count uint32, lastEventText string, naddr s
 				</div>
 				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
 					<h2 class="text-lg font-semibold text-stone-800 mb-4">Open</h2>
-					<p class="text-xs text-stone-400 mb-4 font-mono">{ naddr }</p>
 					<p class="text-xs text-stone-400 mb-4 font-mono">{ group.Address.String() }</p>
 					<div class="flex flex-wrap flex-col gap-4 mb-4">
-						<a href={ "https://grimoire.rocks/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-800 text-white hover:bg-stone-700 transition-colors">grimoire.rocks</a>
+						<a href={ templ.SafeURL("nostr:" + naddr) } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">native</a>
+						<a href={ "https://web.nostrord.com/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">nostrord</a>
+						<a href={ "https://grimoire.rocks/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">grimoire.rocks</a>
 						<a href={ "https://app.flotilla.social/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">flotilla.social</a>
 						<a href={ "https://chachi.chat/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">chachi.chat</a>
 					</div>
 				</div>
-				<p class="text-sm text-stone-400 mt-16">powered by <span class="font-medium text-stone-600">croissant</span></p>
+				<p class="text-sm text-stone-400 mt-16">powered by <a href="https://viewsource.win/fiatjaf.com/croissant" class="font-medium text-stone-600">croissant</a></p>
 			</main>
 		</body>
 	</html>

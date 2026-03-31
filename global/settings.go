@@ -28,6 +28,15 @@ type Settings struct {
 		LiveKitAPIKey    string `json:"livekit_apikey"`
 		LiveKitAPISecret string `json:"livekit_apisecret"`
 	} `json:"groups"`
+
+	relayPublicKey nostr.PubKey
+}
+
+func (s Settings) RelayPublicKey() nostr.PubKey {
+	if s.relayPublicKey == nostr.ZeroPK {
+		s.relayPublicKey = s.RelaySecretKey.Public()
+	}
+	return s.relayPublicKey
 }
 
 func (s Settings) HTTPScheme() string {

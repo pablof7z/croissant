@@ -11,7 +11,6 @@ import (
 	"fiatjaf.com/nostr/khatru"
 
 	"fiatjaf.com/croissant/global"
-	"fiatjaf.com/croissant/groups"
 )
 
 //go:embed static
@@ -46,45 +45,57 @@ func main() {
 	global.R.Info.Self = &pk
 	global.R.Info.AddSupportedNIP(29)
 
-	global.R.UseEventstore(store, 1000)
-
 	relayURL := global.S.RelayWSURL(global.E.Host, global.E.Port)
 
-	groups.Init(groups.Options{
+	State = NewGroupsState(Options{
 		DB:        store,
 		SecretKey: global.S.RelaySecretKey,
 		Broadcast: global.R.BroadcastEvent,
 		RelayURL:  relayURL,
 		BaseURL:   relayBaseURL,
-		LiveKit: groups.LiveKitSettings{
+		LiveKit: LiveKitSettings{
 			ServerURL: global.S.Groups.LiveKitServerURL,
 			APIKey:    global.S.Groups.LiveKitAPIKey,
 			APISecret: global.S.Groups.LiveKitAPISecret,
 		},
 	})
 
-	global.R.OnEvent = func(ctx context.Context, event nostr.Event) (bool, string) {
-		if groups.IsGroupEvent(event) {
-			return groups.State.RejectEvent(ctx, event)
-		}
-		return true, "blocked: not a group event"
+	global.R.QueryStored = State.Query
+	global.R.StoreEvent = func(ctx context.Context, event nostr.Event) error {
+		return store.SaveEvent(event)
 	}
-	global.R.OnEventSaved = func(ctx context.Context, event nostr.Event) {
-		if groups.IsGroupEvent(event) {
-			groups.State.HandleEventSaved(event)
-		}
+	global.R.ReplaceEvent = func(ctx context.Context, event nostr.Event) error {
+		return store.ReplaceEvent(event)
+	}
+	global.R.DeleteEvent = func(ctx context.Context, id nostr.ID) error {
+		return store.DeleteEvent(id)
 	}
 
+	global.R.OnEvent = State.RejectEvent
+	global.R.OnEventSaved = State.HandleEventSaved
+	global.R.OnRequest = State.RequestAuthWhenNecessary
+	global.R.PreventBroadcast = State.ShouldPreventBroadcast
+
 	mux := global.R.Router()
-	groups.SetupHTTP(mux)
+
+	// basic routes
 	mux.HandleFunc("GET /favicon.ico", faviconHandler)
 	mux.Handle("GET /static/", http.FileServer(http.FS(staticFiles)))
 	mux.HandleFunc("POST /settings", global.SettingsHandler)
+
+	// group page
 	mux.HandleFunc("GET /group/{id}", groupHandler)
+
+	// nip29 livekit
+	mux.HandleFunc("GET /.well-known/nip29/livekit", livekitStatusHandler)
+	mux.HandleFunc("GET /.well-known/nip29/livekit/{groupId}", livekitAuthHandler)
+	mux.HandleFunc("POST /groups/livekit/webhook", livekitWebhookHandler)
+
+	// home
 	mux.HandleFunc("GET /", homeHandler)
 
 	addr := net.JoinHostPort(global.E.Host, global.E.Port)
-	L.Printf("listening on %s", addr)
+	L.Printf("listening on http://%s", addr)
 	if err := http.ListenAndServe(addr, global.R); err != nil {
 		L.Fatal().Err(err).Msg("server error")
 	}
