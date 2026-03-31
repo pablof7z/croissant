@@ -1,0 +1,30 @@
+package main
+
+import "fiatjaf.com/croissant/global"
+
+templ layout(title string) {
+	<!DOCTYPE html>
+	<html>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>
+				if title != "" {
+					{ title }
+					·
+				}
+				{ global.S.RelayName }
+			</title>
+			<link rel="stylesheet" href="/static/styles.css"/>
+			<script src="https://cdn.jsdelivr.net/npm/nostr-web-components/dist/nostr-name.js"></script>
+			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+		</head>
+		<body class="min-h-screen bg-stone-50 p-4 sm:p-8">
+			<main class="max-w-[96%] w-[1360px] mx-auto">
+				{ children... }
+				<p class="text-sm text-stone-400 mt-16">powered by <a href="https://viewsource.win/fiatjaf.com/croissant" class="font-medium text-stone-600">croissant</a></p>
+			</main>
+		</body>
+		<script src="https://cdn.jsdelivr.net/npm/window.nostr.js/dist/window.nostr.min.js"></script>
+	</html>
+}

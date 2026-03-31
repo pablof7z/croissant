@@ -42,15 +42,25 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, err := State.DB.CountEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}})
-	if err != nil {
-		L.Warn().Err(err).Str("group", group.Address.ID).Msg("failed to count group events")
+	if group.Hidden {
+		http.NotFound(w, r)
+		return
 	}
 
+	count := -1
 	lastEventText := ""
-	for event := range State.DB.QueryEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}, Limit: 1}, 1) {
-		lastEventText = time.Unix(int64(event.CreatedAt), 0).Format("Jan 2, 2006; 15:04")
-		break
+
+	if !group.Private {
+		countV, err := State.DB.CountEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}})
+		if err != nil {
+			L.Warn().Err(err).Str("group", group.Address.ID).Msg("failed to count group events")
+		}
+		count = int(countV)
+
+		for event := range State.DB.QueryEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}, Limit: 1}, 1) {
+			lastEventText = time.Unix(int64(event.CreatedAt), 0).Format("Jan 2, 2006; 15:04")
+			break
+		}
 	}
 
 	naddr := nip19.EncodeNaddr(
@@ -65,128 +75,119 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-templ groupPage(group *Group, count uint32, lastEventText string, naddr string) {
-	<!DOCTYPE html>
-	<html>
-		<head>
-			<meta charset="utf-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>{ group.Name } · { global.S.RelayName }</title>
-			<link rel="stylesheet" href="/static/styles.css"/>
-			<script src="https://cdn.jsdelivr.net/npm/nostr-web-components/dist/nostr-name.js"></script>
-		</head>
-		<body class="min-h-screen bg-stone-50 p-4 sm:p-8">
-			<main class="max-w-lg mx-auto">
-				<header class="mb-8">
-					<div class="flex items-center justify-between">
-						<div class="flex items-center gap-3">
-							if group.Picture != "" {
-								<img src={ group.Picture } class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
-							} else if global.S.RelayIcon != "" {
-								<img src={ global.S.RelayIcon } class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
-							} else {
-								<img src="/static/logo.png" class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
-							}
-							<div>
-								<p class="text-xs text-stone-500 uppercase tracking-wide">Group</p>
-								<h1 class="text-xl font-semibold text-stone-800">{ group.Name }</h1>
-							</div>
-						</div>
-						<a href="/" class="text-sm text-stone-500 hover:text-stone-700 transition-colors">Back</a>
-					</div>
-				</header>
-				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
-					<div>
-						<p class="text-xs text-stone-500 uppercase tracking-wide">Group ID</p>
-						<p class="text-sm font-mono text-stone-700">{ group.Address.ID }</p>
-					</div>
-					if group.About != "" {
-						<p class="text-sm text-stone-600">{ group.About }</p>
+templ groupPage(group *Group, count int, lastEventText string, naddr string) {
+	@layout(group.Name) {
+		<header class="mb-8">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-3">
+					if group.Picture != "" {
+						<img src={ group.Picture } class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
+					} else if global.S.RelayIcon != "" {
+						<img src={ global.S.RelayIcon } class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
+					} else {
+						<img src="/static/logo.png" class="w-10 h-10 rounded-lg object-cover shadow-sm"/>
 					}
-					<div class="flex flex-wrap gap-2">
-						if group.Private {
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">private</span>
-						} else {
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">public</span>
-						}
-						if group.Restricted {
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">restricted</span>
-						}
-						if group.Closed {
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">closed</span>
-						}
-						if group.Hidden {
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">hidden</span>
-						}
-						if group.LiveKit {
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">livekit</span>
-						}
+					<div>
+						<p class="text-xs text-stone-500 uppercase tracking-wide">Group</p>
+						<h1 class="text-xl font-semibold text-stone-800">{ group.Name }</h1>
 					</div>
 				</div>
-				<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 my-8">
-					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-						<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", len(group.Members)) }</div>
-						<div class="text-sm text-stone-500">Members</div>
-					</div>
-					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-						<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", count) }</div>
-						<div class="text-sm text-stone-500">Events</div>
-					</div>
-					<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-						<div class="text-sm font-semibold text-stone-700">{ lastEventText }</div>
-						<div class="text-sm text-stone-500">Last Event</div>
-					</div>
+				<a href="/" class="text-sm text-stone-500 hover:text-stone-700 transition-colors">Back</a>
+			</div>
+		</header>
+		<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
+			<div>
+				<p class="text-xs text-stone-500 uppercase tracking-wide">Group ID</p>
+				<p class="text-sm font-mono text-stone-700">{ group.Address.ID }</p>
+			</div>
+			if group.About != "" {
+				<p class="text-sm text-stone-600">{ group.About }</p>
+			}
+			<div class="flex flex-wrap gap-2">
+				if group.Private {
+					<span title="messages are only shown to authenticated members" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">private</span>
+				} else {
+					<span title="all messages can be read by anyone" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">public</span>
+				}
+				if group.Restricted {
+					<span title="only members can send messages" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">restricted</span>
+				} else {
+					<span title="anyone can send messages to the group even without joining" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">unrestricted</span>
+				}
+				if group.Closed {
+					<span title="people need an invite to join, or have to be manually approved" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">closed</span>
+				} else {
+					<span title="anyone can join" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">open</span>
+				}
+				if group.LiveKit {
+					<span title="audio/video room" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">livekit</span>
+				}
+			</div>
+		</div>
+		if !group.Private {
+			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 my-8">
+				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
+					<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", len(group.Members)) }</div>
+					<div class="text-sm text-stone-500">Members</div>
 				</div>
-				<div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden mb-8">
-					<div class="px-6 py-4 border-b border-stone-100">
-						<h2 class="text-lg font-semibold text-stone-800">Members</h2>
-					</div>
-					<div class="overflow-x-auto">
-						<table class="w-full">
-							<thead class="bg-stone-50">
-								<tr>
-									<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Member</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Roles</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-stone-100">
-								for member, roles := range group.Members {
-									<tr class="hover:bg-stone-50 transition-colors">
-										<td class="px-6 py-4">
-											<a href={ "https://njump.me/" + member.Hex() } target="_blank" class="text-sm text-stone-700 hover:text-stone-900 transition-colors">
-												<nostr-name pubkey={ member.Hex() }></nostr-name>
-											</a>
-											<br/>
-											<span class="text-xs text-stone-400 font-mono">{ member.Hex() }</span>
-										</td>
-										<td class="px-6 py-4">
-											if len(roles) > 0 {
-												for role := range roles {
-													<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 mr-1">{ role }</span>
-												}
-											} else {
-												<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">member</span>
+				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
+					<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", count) }</div>
+					<div class="text-sm text-stone-500">Events</div>
+				</div>
+				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
+					<div class="text-sm font-semibold text-stone-700">{ lastEventText }</div>
+					<div class="text-sm text-stone-500">Last Event</div>
+				</div>
+			</div>
+			<div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden mb-8">
+				<div class="px-6 py-4 border-b border-stone-100">
+					<h2 class="text-lg font-semibold text-stone-800">Members</h2>
+				</div>
+				<div class="overflow-x-auto">
+					<table class="w-full">
+						<thead class="bg-stone-50">
+							<tr>
+								<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Member</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-stone-500 uppercase tracking-wider">Roles</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-stone-100">
+							for member, roles := range group.Members {
+								<tr class="hover:bg-stone-50 transition-colors">
+									<td class="px-6 py-4">
+										<a href={ "https://njump.me/" + member.Hex() } target="_blank" class="text-sm text-stone-700 hover:text-stone-900 transition-colors">
+											<nostr-name pubkey={ member.Hex() }></nostr-name>
+										</a>
+										<br/>
+										<span class="text-xs text-stone-400 font-mono">{ member.Hex() }</span>
+									</td>
+									<td class="px-6 py-4">
+										if len(roles) > 0 {
+											for role := range roles {
+												<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 mr-1">{ role }</span>
 											}
-										</td>
-									</tr>
-								}
-							</tbody>
-						</table>
-					</div>
+										} else {
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">member</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
 				</div>
-				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
-					<h2 class="text-lg font-semibold text-stone-800 mb-4">Open</h2>
-					<p class="text-xs text-stone-400 mb-4 font-mono">{ group.Address.String() }</p>
-					<div class="flex flex-wrap flex-col gap-4 mb-4">
-						<a href={ templ.SafeURL("nostr:" + naddr) } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">native</a>
-						<a href={ "https://web.nostrord.com/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">nostrord</a>
-						<a href={ "https://grimoire.rocks/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">grimoire.rocks</a>
-						<a href={ "https://app.flotilla.social/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">flotilla.social</a>
-						<a href={ "https://chachi.chat/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">chachi.chat</a>
-					</div>
-				</div>
-				<p class="text-sm text-stone-400 mt-16">powered by <a href="https://viewsource.win/fiatjaf.com/croissant" class="font-medium text-stone-600">croissant</a></p>
-			</main>
-		</body>
-	</html>
+			</div>
+		}
+		<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+			<h2 class="text-lg font-semibold text-stone-800 mb-4">Open</h2>
+			<p class="text-xs text-stone-400 mb-4 font-mono">{ group.Address.String() }</p>
+			<div class="flex flex-wrap flex-col gap-4 mb-4">
+				<a href={ templ.SafeURL("nostr:" + naddr) } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">native</a>
+				<a href={ "https://web.nostrord.com/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">nostrord</a>
+				<a href={ "https://grimoire.rocks/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">grimoire.rocks</a>
+				<a href={ "https://app.flotilla.social/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">flotilla.social</a>
+				<a href={ "https://chachi.chat/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">chachi.chat</a>
+			</div>
+		</div>
+		<p class="text-sm text-stone-400 mt-16">powered by <a href="https://viewsource.win/fiatjaf.com/croissant" class="font-medium text-stone-600">croissant</a></p>
+	}
 }
