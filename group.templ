@@ -11,29 +11,6 @@ import (
 	"fiatjaf.com/croissant/global"
 )
 
-type groupMemberView struct {
-	PubKey nostr.PubKey
-	Roles  []string
-}
-
-type groupPageView struct {
-	ID            string
-	Name          string
-	About         string
-	Picture       string
-	Relay         string
-	Private       bool
-	Restricted    bool
-	Closed        bool
-	Hidden        bool
-	LiveKit       bool
-	Members       []groupMemberView
-	MemberCount   int
-	EventCount    uint32
-	LastEventText string
-	Naddr         string
-}
-
 func groupHandler(w http.ResponseWriter, r *http.Request) {
 	groupID := r.PathValue("id")
 	group, ok := State.Groups.Load(groupID)
@@ -58,7 +35,7 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 		count = int(countV)
 
 		for event := range State.DB.QueryEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}, Limit: 1}, 1) {
-			lastEventText = time.Unix(int64(event.CreatedAt), 0).Format("Jan 2, 2006; 15:04")
+			lastEventText = time.Unix(int64(event.CreatedAt), 0).Format("Jan 2, 2006 15:04")
 			break
 		}
 	}
@@ -124,15 +101,15 @@ templ groupPage(group *Group, count int, lastEventText string, naddr string) {
 		if !group.Private {
 			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 my-8">
 				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-					<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", len(group.Members)) }</div>
+					<div class="text-2xl font-bold text-amber-600 h-8">{ fmt.Sprintf("%d", len(group.Members)) }</div>
 					<div class="text-sm text-stone-500">Members</div>
 				</div>
 				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-					<div class="text-2xl font-bold text-amber-600">{ fmt.Sprintf("%d", count) }</div>
+					<div class="text-2xl font-bold text-amber-600 h-8">{ fmt.Sprintf("%d", count) }</div>
 					<div class="text-sm text-stone-500">Events</div>
 				</div>
 				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
-					<div class="text-sm font-semibold text-stone-700">{ lastEventText }</div>
+					<div class="text-sm font-semibold text-amber-500 h-8 flex items-center justify-center">{ lastEventText }</div>
 					<div class="text-sm text-stone-500">Last Event</div>
 				</div>
 			</div>
@@ -160,8 +137,8 @@ templ groupPage(group *Group, count int, lastEventText string, naddr string) {
 									</td>
 									<td class="px-6 py-4">
 										if len(roles) > 0 {
-											for role := range roles {
-												<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 mr-1">{ role }</span>
+											for _, role := range roles {
+												<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 mr-1">{ role.Name }</span>
 											}
 										} else {
 											<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">member</span>
