@@ -12,13 +12,33 @@ func (s *GroupsState) Query(ctx context.Context, filter nostr.Filter) iter.Seq[n
 	return func(yield func(nostr.Event) bool) {
 		authed := khatru.GetAllAuthed(ctx)
 
-		for evt := range s.DB.QueryEvents(filter, 1500) {
-			if s.hideEventFromReader(evt, authed) {
-				continue
-			}
-
-			if !yield(evt) {
+		if filter.Search != "" {
+			groupIDs, _ := filter.Tags["h"]
+			if len(groupIDs) > 0 && len(groupIDs) < 5 {
+				for _, groupId := range groupIDs {
+					if group, ok := s.Groups.Load(groupId); ok {
+						if !group.Private || group.AnyOfTheseIsAMember(authed) {
+							for evt := range group.SearchEvents(filter, 40) {
+								if !yield(evt) {
+									return
+								}
+							}
+						}
+					}
+				}
+			} else {
+				// no groups or too many groups
 				return
+			}
+		} else {
+			for evt := range s.DB.QueryEvents(filter, 1500) {
+				if s.hideEventFromReader(evt, authed) {
+					continue
+				}
+
+				if !yield(evt) {
+					return
+				}
 			}
 		}
 	}

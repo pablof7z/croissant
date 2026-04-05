@@ -9,6 +9,7 @@ import (
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore/mmm"
 	"fiatjaf.com/nostr/khatru"
+	"github.com/pemistahl/lingua-go"
 
 	"fiatjaf.com/croissant/global"
 )
@@ -18,6 +19,7 @@ var staticFiles embed.FS
 
 var (
 	currentVersion string
+	mmmm           *mmm.MultiMmapManager
 	store          *mmm.IndexingLayer
 	L              = global.L
 )
@@ -25,12 +27,14 @@ var (
 func main() {
 	global.Init()
 
-	manager, storeInstance, err := initStore(global.E.DataPath)
-	store = storeInstance
+	var err error
+	mmmm, store, err = initStore(global.E.DataPath)
 	if err != nil {
 		L.Fatal().Err(err).Msg("failed to initialize store")
 	}
-	defer manager.Close()
+	defer mmmm.Close()
+
+	detector = lingua.NewLanguageDetectorBuilder().FromLanguages(lingua.AllSpokenLanguages()...).Build()
 
 	relayBaseURL := global.S.RelayBaseURL(global.E.Host, global.E.Port)
 

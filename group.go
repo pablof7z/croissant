@@ -2,11 +2,15 @@ package main
 
 import (
 	"iter"
+	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/nip29"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -20,6 +24,9 @@ type Group struct {
 
 	last50      []nostr.ID
 	last50index atomic.Int32
+
+	searchLanguage string
+	searchIndex    *BleveIndex
 }
 
 func (s *GroupsState) NewGroup(id string) *Group {
@@ -152,4 +159,142 @@ func (g *Group) AnyOfTheseIsAMember(pubkeys []nostr.PubKey) bool {
 		}
 	}
 	return false
+}
+
+func (g *Group) IndexEvent(event nostr.Event) error {
+	if !slices.Contains(indexableKinds, event.Kind) {
+		return nil
+	}
+
+	index, err := g.ensureIndex()
+	if err != nil {
+		return err
+	}
+	if index == nil {
+		return nil
+	}
+
+	return index.SaveEvent(event)
+}
+
+func (g *Group) DeindexEvent(id nostr.ID) error {
+	if g.searchIndex != nil {
+		return g.searchIndex.DeleteEvent(id)
+	}
+
+	return nil
+}
+
+func (g *Group) SearchEvents(filter nostr.Filter, maxLimit int) iter.Seq[nostr.Event] {
+	// ensure we're only filtering for supported kinds (or nothing)
+	if filter.Kinds != nil {
+		for i := 0; i < len(filter.Kinds); i++ {
+			if !slices.Contains(indexableKinds, filter.Kinds[i]) {
+				// swap-delete
+				filter.Kinds[i] = filter.Kinds[len(filter.Kinds)-1]
+				filter.Kinds = filter.Kinds[0 : len(filter.Kinds)-1]
+				i--
+			}
+		}
+	}
+	if len(filter.Kinds) == 0 {
+		return func(yield func(nostr.Event) bool) {}
+	}
+
+	// ensure we have an index
+	index, _ := g.ensureIndex()
+	if index != nil {
+		return index.QueryEvents(filter, maxLimit)
+	}
+
+	return func(yield func(nostr.Event) bool) {}
+}
+
+func (g *Group) ensureIndex() (*BleveIndex, error) {
+	// we already have the index on memory?
+	if g.searchIndex != nil {
+		return g.searchIndex, nil
+	}
+
+	// load an index we already have on disk
+	indexPath := filepath.Join("search", g.Address.ID)
+	langCode, ok, err := readLanguage(indexPath)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		g.searchIndex = &BleveIndex{
+			Path:          indexPath,
+			Language:      langCode,
+			RawEventStore: store,
+		}
+		if err := g.searchIndex.Init(); err != nil {
+			return nil, err
+		}
+
+		return g.searchIndex, nil
+	}
+
+	// try to create the index
+	count, err := store.CountEvents(nostr.Filter{
+		Kinds: indexableKinds,
+		Tags:  nostr.TagMap{"h": []string{g.Address.ID}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if count <= 10 {
+		return nil, nil
+	}
+
+	events, combinedContent := g.collectGroupContent(count)
+	langCode = detectLanguageCode(combinedContent)
+
+	g.searchIndex = &BleveIndex{
+		Path:          indexPath,
+		Language:      langCode,
+		RawEventStore: store,
+	}
+	if err := g.searchIndex.Init(); err != nil {
+		return nil, err
+	}
+	if err := writeLanguage(indexPath, langCode); err != nil {
+		g.searchIndex.Close()
+		return nil, err
+	}
+
+	for _, evt := range events {
+		if err := g.searchIndex.SaveEvent(evt); err != nil {
+			log.Warn().Err(err).Str("group", g.Address.ID).Str("event", evt.ID.Hex()).Msg("failed to index event")
+		}
+	}
+
+	return g.searchIndex, nil
+}
+
+func (g *Group) collectGroupContent(count uint32) ([]nostr.Event, string) {
+	maxInt := int(^uint(0) >> 1)
+	maxLimit := int(count)
+	if maxLimit <= 0 || maxLimit > maxInt {
+		maxLimit = maxInt
+	}
+
+	events := make([]nostr.Event, 0, maxLimit)
+	var combined strings.Builder
+
+	for evt := range store.QueryEvents(nostr.Filter{
+		Kinds: indexableKinds,
+		Tags:  nostr.TagMap{"h": []string{g.Address.ID}},
+	}, maxLimit) {
+		events = append(events, evt)
+		if evt.Content == "" {
+			continue
+		}
+		if combined.Len() > 0 {
+			combined.WriteByte('\n')
+		}
+		combined.WriteString(evt.Content)
+	}
+
+	return events, combined.String()
 }

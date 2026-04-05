@@ -66,6 +66,12 @@ func (s *GroupsState) HandleEventSaved(ctx context.Context, event nostr.Event) {
 			s.broadcast(updated)
 		}
 	}
+
+	if group := s.GetGroupFromEvent(event); group != nil {
+		if err := group.IndexEvent(event); err != nil {
+			L.Warn().Err(err).Str("group", group.Address.ID).Msg("failed to index event")
+		}
+	}
 }
 
 func (s *GroupsState) RequestAuthWhenNecessary(

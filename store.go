@@ -13,19 +13,19 @@ func initStore(dataPath string) (*mmm.MultiMmapManager, *mmm.IndexingLayer, erro
 	}
 
 	mmmlogger := L.With().Str("", "mmm").Logger()
-	manager := &mmm.MultiMmapManager{
+	mmmm := &mmm.MultiMmapManager{
 		Dir:    dataPath,
 		Logger: &mmmlogger,
 	}
-	if err := manager.Init(); err != nil {
+	if err := mmmm.Init(); err != nil {
 		return nil, nil, fmt.Errorf("failed to setup mmm: %w", err)
 	}
 
-	layer, err := manager.EnsureLayer("main")
+	layer, err := mmmm.EnsureLayer("main")
 	if err != nil {
-		manager.Close()
+		mmmm.Close()
 		return nil, nil, fmt.Errorf("failed to ensure 'main': %w", err)
 	}
 
-	return manager, layer, nil
+	return mmmm, layer, nil
 }
