@@ -43,6 +43,12 @@ func (s *GroupsState) RejectEvent(ctx context.Context, event nostr.Event) (rejec
 			return true, "duplicate: group already exists"
 		}
 
+		if limiter := global.GroupCreateRateLimiter; limiter != nil {
+			if reject, msg := limiter(ctx, event); reject {
+				return true, msg
+			}
+		}
+
 		// here we will just create the group
 		return false, ""
 	}

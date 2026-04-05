@@ -12,4 +12,6 @@ func Init() {
 	if err != nil {
 		L.Fatal().Err(err).Msg("failed to load settings")
 	}
+
+	ConfigureGroupCreateRateLimit(S)
 }

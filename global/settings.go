@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"fiatjaf.com/nostr"
@@ -24,9 +25,14 @@ type Settings struct {
 	OwnerPubKey      nostr.PubKey    `json:"owner_pubkey"`
 
 	Groups struct {
-		LiveKitServerURL string `json:"livekit_server_url"`
-		LiveKitAPIKey    string `json:"livekit_apikey"`
-		LiveKitAPISecret string `json:"livekit_apisecret"`
+		LiveKitServerURL     string `json:"livekit_server_url"`
+		LiveKitAPIKey        string `json:"livekit_apikey"`
+		LiveKitAPISecret     string `json:"livekit_apisecret"`
+		CreateGroupRateLimit struct {
+			TokensPerInterval int `json:"tokens_per_interval"`
+			IntervalSeconds   int `json:"interval_seconds"`
+			MaxTokens         int `json:"max_tokens"`
+		} `json:"create_group_rate_limit"`
 	} `json:"groups"`
 
 	relayPublicKey nostr.PubKey
@@ -101,6 +107,9 @@ func loadSettings(dataPath string) (Settings, error) {
 			RelayIcon:        "",
 			RelaySecretKey:   nostr.Generate(),
 		}
+		settings.Groups.CreateGroupRateLimit.TokensPerInterval = 1
+		settings.Groups.CreateGroupRateLimit.IntervalSeconds = 10800
+		settings.Groups.CreateGroupRateLimit.MaxTokens = 3
 
 		if err := settings.save(dataPath); err != nil {
 			return Settings{}, err
@@ -171,12 +180,47 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := S.save(E.DataPath); err != nil {
+	parseInt := func(field string, current int) (int, error) {
+		value := strings.TrimSpace(r.FormValue(field))
+		if value == "" {
+			return current, nil
+		}
+		parsed, err := strconv.Atoi(value)
+		if err != nil {
+			return 0, fmt.Errorf("invalid %s", field)
+		}
+		if parsed < 0 {
+			return 0, fmt.Errorf("invalid %s", field)
+		}
+		return parsed, nil
+	}
+
+	if tokens, err := parseInt("group_create_rate_tokens_per_interval", updated.Groups.CreateGroupRateLimit.TokensPerInterval); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	} else {
+		updated.Groups.CreateGroupRateLimit.TokensPerInterval = tokens
+	}
+	if intervalSeconds, err := parseInt("group_create_rate_interval_seconds", updated.Groups.CreateGroupRateLimit.IntervalSeconds); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	} else {
+		updated.Groups.CreateGroupRateLimit.IntervalSeconds = intervalSeconds
+	}
+	if maxTokens, err := parseInt("group_create_rate_max_tokens", updated.Groups.CreateGroupRateLimit.MaxTokens); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	} else {
+		updated.Groups.CreateGroupRateLimit.MaxTokens = maxTokens
+	}
+
+	if err := updated.save(E.DataPath); err != nil {
 		http.Error(w, "failed to save settings", http.StatusInternalServerError)
 		return
 	}
 
 	S = updated
+	ConfigureGroupCreateRateLimit(S)
 	R.Info.Name = updated.RelayName
 	R.Info.Description = updated.RelayDescription
 	R.Info.Contact = updated.RelayContact
