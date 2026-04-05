@@ -32,7 +32,7 @@ templ home(loggedUser nostr.PubKey) {
 				<div x-data="authButton()">
 					<button
 						@click="handleAuth($event)"
-						class="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors duration-150"
+						class="cursor-pointer px-4 py-2 bg-stone-800 text-white rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors duration-150"
 					>
 						if loggedUser != nostr.ZeroPK {
 							logout
