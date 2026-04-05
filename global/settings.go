@@ -130,13 +130,6 @@ func loadSettings(dataPath string) (Settings, error) {
 		}
 	}
 
-	if settings.OwnerPubKey == nostr.ZeroPK {
-		settings.OwnerPubKey = settings.RelaySecretKey.Public()
-		if err := settings.save(dataPath); err != nil {
-			return Settings{}, err
-		}
-	}
-
 	return settings, nil
 }
 
@@ -170,15 +163,6 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 	updated.RelayDescription = strings.TrimSpace(r.FormValue("relay_description"))
 	updated.RelayContact = strings.TrimSpace(r.FormValue("relay_contact"))
 	updated.RelayIcon = strings.TrimSpace(r.FormValue("relay_icon"))
-
-	if ownerInput := strings.TrimSpace(r.FormValue("owner_pubkey")); ownerInput != "" {
-		if pk, ok := pubKeyFromInput(ownerInput); ok {
-			updated.OwnerPubKey = pk
-		} else {
-			http.Error(w, "invalid owner pubkey", http.StatusBadRequest)
-			return
-		}
-	}
 
 	parseInt := func(field string, current int) (int, error) {
 		value := strings.TrimSpace(r.FormValue(field))
