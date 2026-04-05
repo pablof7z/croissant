@@ -22,6 +22,7 @@ var (
 	mmmm           *mmm.MultiMmapManager
 	store          *mmm.IndexingLayer
 	L              = global.L
+	pool           = nostr.NewPool(nostr.PoolOptions{})
 )
 
 func main() {

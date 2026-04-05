@@ -6,6 +6,7 @@ require (
 	fiatjaf.com/nostr v0.0.0-20260403153006-371cecdb8498
 	github.com/a-h/templ v0.3.1001
 	github.com/blevesearch/bleve/v2 v2.4.4
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/livekit/protocol v1.45.1
 	github.com/pemistahl/lingua-go v1.4.0

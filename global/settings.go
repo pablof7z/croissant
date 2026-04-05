@@ -25,10 +25,12 @@ type Settings struct {
 	OwnerPubKey      nostr.PubKey    `json:"owner_pubkey"`
 
 	Groups struct {
-		LiveKitServerURL     string `json:"livekit_server_url"`
-		LiveKitAPIKey        string `json:"livekit_apikey"`
-		LiveKitAPISecret     string `json:"livekit_apisecret"`
-		CreateGroupRateLimit struct {
+		LiveKitServerURL          string   `json:"livekit_server_url"`
+		LiveKitAPIKey             string   `json:"livekit_apikey"`
+		LiveKitAPISecret          string   `json:"livekit_apisecret"`
+		CreateGroupPresenceRelays []string `json:"create_group_presence_relays"`
+		FreeTransitPresenceRelays []string `json:"free_transit_presence_relays"`
+		CreateGroupRateLimit      struct {
 			TokensPerInterval int `json:"tokens_per_interval"`
 			IntervalSeconds   int `json:"interval_seconds"`
 			MaxTokens         int `json:"max_tokens"`
@@ -164,6 +166,23 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 	updated.RelayContact = strings.TrimSpace(r.FormValue("relay_contact"))
 	updated.RelayIcon = strings.TrimSpace(r.FormValue("relay_icon"))
 
+	parseCSV := func(field string) []string {
+		value := strings.TrimSpace(r.FormValue(field))
+		if value == "" {
+			return nil
+		}
+		parts := strings.Split(value, ",")
+		result := make([]string, 0, len(parts))
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed == "" {
+				continue
+			}
+			result = append(result, trimmed)
+		}
+		return result
+	}
+
 	parseInt := func(field string, current int) (int, error) {
 		value := strings.TrimSpace(r.FormValue(field))
 		if value == "" {
@@ -197,6 +216,9 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		updated.Groups.CreateGroupRateLimit.MaxTokens = maxTokens
 	}
+
+	updated.Groups.CreateGroupPresenceRelays = parseCSV("create_group_presence_relays")
+	updated.Groups.FreeTransitPresenceRelays = parseCSV("free_transit_presence_relays")
 
 	if err := updated.save(E.DataPath); err != nil {
 		http.Error(w, "failed to save settings", http.StatusInternalServerError)

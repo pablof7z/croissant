@@ -49,6 +49,10 @@ func (s *GroupsState) RejectEvent(ctx context.Context, event nostr.Event) (rejec
 			}
 		}
 
+		if !hasPresence(ctx, global.S.Groups.CreateGroupPresenceRelays, event.PubKey, false) {
+			return true, "restricted: missing profile in presence relays"
+		}
+
 		// here we will just create the group
 		return false, ""
 	}
@@ -72,6 +76,10 @@ func (s *GroupsState) RejectEvent(ctx context.Context, event nostr.Event) (rejec
 			if ctag := event.Tags.Find("code"); ctag == nil || !slices.Contains(group.Group.InviteCodes, ctag[1]) {
 				group.mu.RUnlock()
 				return true, "restricted: group is closed, you need an invite code"
+			}
+		} else {
+			if !hasPresence(ctx, global.S.Groups.FreeTransitPresenceRelays, event.PubKey, true) {
+				return true, "restricted: missing profile in presence relays"
 			}
 		}
 
@@ -102,6 +110,7 @@ func (s *GroupsState) RejectEvent(ctx context.Context, event nostr.Event) (rejec
 		}
 
 		group.mu.RUnlock()
+
 		return false, ""
 	}
 
@@ -113,6 +122,12 @@ func (s *GroupsState) RejectEvent(ctx context.Context, event nostr.Event) (rejec
 			return true, "blocked: unknown member"
 		}
 		group.mu.RUnlock()
+	}
+
+	if !group.Restricted && !group.Closed {
+		if !hasPresence(ctx, global.S.Groups.FreeTransitPresenceRelays, event.PubKey, true) {
+			return true, "restricted: missing profile in presence relays"
+		}
 	}
 
 	// prevent republishing events that were just deleted

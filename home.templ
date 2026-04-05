@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"fiatjaf.com/nostr"
 
@@ -142,6 +143,28 @@ templ home(loggedUser nostr.PubKey) {
 							/>
 						</div>
 					</div>
+				</div>
+				<div>
+					<label class="block text-sm font-medium text-stone-700 mb-1.5">Create Group Presence Relays</label>
+					<p class="text-xs text-stone-500 mb-3">Restrict group creation to users that can be found on these (comma-separated). Leave empty to accept anyone.</p>
+					<input
+						type="text"
+						name="create_group_presence_relays"
+						value={ strings.Join(global.S.Groups.CreateGroupPresenceRelays, ", ") }
+						placeholder="nostr.wine, nostrarchives.com"
+						class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
+					/>
+				</div>
+				<div>
+					<label class="block text-sm font-medium text-stone-700 mb-1.5">Free Transit Presence Relays</label>
+					<p class="text-xs text-stone-500 mb-3">Unrestricted groups and automatic join will be restricted to users in these (comma-separated). Leave empty to accept anyone.</p>
+					<input
+						type="text"
+						name="free_transit_presence_relays"
+						value={ strings.Join(global.S.Groups.FreeTransitPresenceRelays, ", ") }
+						placeholder="pow.relays.land, relay.certifiedhuman.com"
+						class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
+					/>
 				</div>
 				<div class="pt-4">
 					<button type="submit" class="cursor-pointer w-full sm:w-auto px-6 py-2.5 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors duration-150 shadow-sm">
