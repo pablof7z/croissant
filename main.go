@@ -25,6 +25,14 @@ var (
 	pool           = nostr.NewPool(nostr.PoolOptions{})
 )
 
+func loggedUserMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		loggedUser, _ := global.GetLoggedUser(r)
+		ctx := global.WithLoggedUser(r.Context(), loggedUser)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func main() {
 	global.Init()
 
@@ -101,7 +109,8 @@ func main() {
 
 	addr := net.JoinHostPort(global.E.Host, global.E.Port)
 	L.Printf("listening on http://%s", addr)
-	if err := http.ListenAndServe(addr, global.R); err != nil {
+	handler := loggedUserMiddleware(global.R)
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		L.Fatal().Err(err).Msg("server error")
 	}
 }

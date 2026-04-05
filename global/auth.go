@@ -1,6 +1,7 @@
 package global
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 )
 
 const nip98CookieName = "nip98"
+
+type loggedUserContextKey struct{}
 
 func GetLoggedUser(r *http.Request) (nostr.PubKey, bool) {
 	cookie, err := r.Cookie(nip98CookieName)
@@ -51,6 +54,28 @@ func GetLoggedUser(r *http.Request) (nostr.PubKey, bool) {
 	}
 
 	return evt.PubKey, true
+}
+
+func WithLoggedUser(ctx context.Context, pubKey nostr.PubKey) context.Context {
+	return context.WithValue(ctx, loggedUserContextKey{}, pubKey)
+}
+
+func LoggedUserFromContext(ctx context.Context) nostr.PubKey {
+	if ctx == nil {
+		return nostr.ZeroPK
+	}
+
+	value := ctx.Value(loggedUserContextKey{})
+	if value == nil {
+		return nostr.ZeroPK
+	}
+
+	pubKey, ok := value.(nostr.PubKey)
+	if !ok {
+		return nostr.ZeroPK
+	}
+
+	return pubKey
 }
 
 func pubKeyFromInput(input string) (nostr.PubKey, bool) {
