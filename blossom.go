@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
 	"path/filepath"
 
 	"fiatjaf.com/nostr"
@@ -13,14 +12,15 @@ import (
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/khatru/blossom"
 
+	"fiatjaf.com/croissant/fs"
 	"fiatjaf.com/croissant/global"
 )
 
 var (
-	blossomServer    *blossom.BlossomServer
-	blossomIndex     blossom.EventStoreBlobIndexWrapper
-	blossomIndexDB   *mmm.IndexingLayer
-	blossomFilesPath string
+	blossomServer  *blossom.BlossomServer
+	blossomIndex   blossom.EventStoreBlobIndexWrapper
+	blossomIndexDB *mmm.IndexingLayer
+	blossomFS      fs.FS
 )
 
 func initBlossom(relay *khatru.Relay, serviceURL string) error {
@@ -34,9 +34,23 @@ func initBlossom(relay *khatru.Relay, serviceURL string) error {
 		return fmt.Errorf("failed to ensure blossom index: %w", err)
 	}
 
-	blossomFilesPath = filepath.Join(global.E.DataPath, "blossom-files")
-	if err := os.MkdirAll(blossomFilesPath, 0o755); err != nil {
-		return fmt.Errorf("failed to create blossom directory: %w", err)
+	// init filesystem backend
+	if global.S.Blossom.S3KeyID != "" && global.S.Blossom.S3Secret != "" && global.S.Blossom.S3Bucket != "" {
+		blossomFS, err = fs.NewS3FS(global.S.Blossom.S3Endpoint, global.S.Blossom.S3KeyID, global.S.Blossom.S3Secret, global.S.Blossom.S3Bucket)
+		if err != nil {
+			return fmt.Errorf("failed to init s3 filesystem: %w", err)
+		}
+		L.Info().Str("endpoint", global.S.Blossom.S3Endpoint).Str("bucket", global.S.Blossom.S3Bucket).Msg("blossom using s3")
+	} else {
+		localPath := global.S.Blossom.LocalPath
+		if localPath == "" {
+			localPath = filepath.Join(global.E.DataPath, "blossom-files")
+		}
+		blossomFS, err = fs.NewSubdirFS(localPath)
+		if err != nil {
+			return fmt.Errorf("failed to init local filesystem: %w", err)
+		}
+		L.Info().Str("path", localPath).Msg("blossom using local filesystem")
 	}
 
 	blossomIndex = blossom.EventStoreBlobIndexWrapper{
@@ -48,17 +62,14 @@ func initBlossom(relay *khatru.Relay, serviceURL string) error {
 	blossomServer.Store = blossomIndex
 
 	blossomServer.StoreBlob = func(ctx context.Context, sha256 string, ext string, body []byte) error {
-		return os.WriteFile(filepath.Join(blossomFilesPath, sha256+ext), body, 0644)
+		return blossomFS.Save(ctx, sha256+ext, body)
 	}
 	blossomServer.LoadBlob = func(ctx context.Context, sha256 string, ext string) (io.ReadSeeker, *url.URL, error) {
-		file, err := os.Open(filepath.Join(blossomFilesPath, sha256+ext))
-		if err != nil {
-			return nil, nil, err
-		}
-		return file, nil, nil
+		reader, err := blossomFS.Open(ctx, sha256+ext)
+		return reader, nil, err
 	}
 	blossomServer.DeleteBlob = func(ctx context.Context, sha256 string, ext string) error {
-		return os.Remove(filepath.Join(blossomFilesPath, sha256+ext))
+		return blossomFS.Remove(ctx, sha256+ext)
 	}
 
 	blossomServer.RejectUpload = func(ctx context.Context, auth *nostr.Event, size int, ext string) (bool, string, int) {

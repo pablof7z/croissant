@@ -107,8 +107,10 @@ func main() {
 	// home
 	mux.HandleFunc("GET /", homeHandler)
 
-	if err := initBlossom(global.R, relayBaseURL); err != nil {
-		L.Fatal().Err(err).Msg("failed to initialize blossom")
+	if global.S.Blossom.Enabled {
+		if err := initBlossom(global.R, relayBaseURL); err != nil {
+			L.Fatal().Err(err).Msg("failed to initialize blossom")
+		}
 	}
 
 	addr := net.JoinHostPort(global.E.Host, global.E.Port)

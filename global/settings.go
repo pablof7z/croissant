@@ -24,6 +24,15 @@ type Settings struct {
 	RelaySecretKey   nostr.SecretKey `json:"relay_secret_key"`
 	OwnerPubKey      nostr.PubKey    `json:"owner_pubkey"`
 
+	Blossom struct {
+		Enabled    bool   `json:"enabled"`
+		S3Endpoint string `json:"s3_endpoint"`
+		S3KeyID    string `json:"s3_key_id"`
+		S3Secret   string `json:"s3_secret"`
+		S3Bucket   string `json:"s3_bucket"`
+		LocalPath  string `json:"local_path"`
+	} `json:"blossom"`
+
 	Groups struct {
 		LiveKitServerURL          string   `json:"livekit_server_url"`
 		LiveKitAPIKey             string   `json:"livekit_apikey"`
@@ -219,6 +228,13 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 
 	updated.Groups.CreateGroupPresenceRelays = parseCSV("create_group_presence_relays")
 	updated.Groups.FreeTransitPresenceRelays = parseCSV("free_transit_presence_relays")
+
+	updated.Blossom.Enabled = r.FormValue("blossom_enabled") == "true"
+	updated.Blossom.LocalPath = strings.TrimSpace(r.FormValue("blossom_local_path"))
+	updated.Blossom.S3Endpoint = strings.TrimSpace(r.FormValue("blossom_s3_endpoint"))
+	updated.Blossom.S3Bucket = strings.TrimSpace(r.FormValue("blossom_s3_bucket"))
+	updated.Blossom.S3KeyID = strings.TrimSpace(r.FormValue("blossom_s3_key_id"))
+	updated.Blossom.S3Secret = strings.TrimSpace(r.FormValue("blossom_s3_secret"))
 
 	if err := updated.save(E.DataPath); err != nil {
 		http.Error(w, "failed to save settings", http.StatusInternalServerError)
