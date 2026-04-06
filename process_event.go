@@ -58,6 +58,22 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 		action.Apply(&group.Group)
 		group.mu.Unlock()
 
+		// update AllMembers counts
+		switch act := action.(type) {
+		case nip29.PutUser:
+			for _, target := range act.Targets {
+				s.AllMembers.Compute(target.PubKey, func(count int, exists bool) (newV int, delete bool) {
+					return count + 1, false
+				})
+			}
+		case nip29.RemoveUser:
+			for _, targetPubKey := range act.Targets {
+				s.AllMembers.Compute(targetPubKey, func(count int, exists bool) (newV int, delete bool) {
+					return count - 1, count <= 1
+				})
+			}
+		}
+
 		// if it's a delete event we have to actually delete stuff from the database here
 		if event.Kind == nostr.KindSimpleGroupDeleteEvent {
 			for tag := range event.Tags.FindAll("e") {

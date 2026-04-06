@@ -65,29 +65,11 @@ func initBlossom(relay *khatru.Relay, serviceURL string) error {
 		if auth == nil {
 			return true, "authentication required", 401
 		}
-		if !isMemberOfAnyGroup(auth.PubKey) {
+		if _, exists := State.AllMembers.Load(auth.PubKey); !exists {
 			return true, "only group members can upload blobs", 403
 		}
 		return false, "", 0
 	}
 
 	return nil
-}
-
-func isMemberOfAnyGroup(pubkey nostr.PubKey) bool {
-	if State == nil {
-		return false
-	}
-
-	authed := []nostr.PubKey{pubkey}
-	found := false
-	State.Groups.Range(func(_ string, group *Group) bool {
-		if group.AnyOfTheseIsAMember(authed) {
-			found = true
-			return false
-		}
-		return true
-	})
-
-	return found
 }
