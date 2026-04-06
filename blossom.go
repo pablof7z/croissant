@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"path"
+	"path/filepath"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore/mmm"
@@ -42,15 +43,12 @@ func initBlossom(relay *khatru.Relay, serviceURL string) error {
 		}
 		L.Info().Str("endpoint", global.S.Blossom.S3Endpoint).Str("bucket", global.S.Blossom.S3Bucket).Msg("blossom using s3")
 	} else {
-		localPath := global.S.Blossom.LocalPath
-		if localPath == "" {
-			localPath = global.DefaultBlossomLocalPath
-		}
-		blossomFS, err = fs.NewSubdirFS(localPath)
+		p := filepath.Join(global.E.DataPath, global.S.Blossom.LocalPath)
+		blossomFS, err = fs.NewSubdirFS(p)
 		if err != nil {
 			return fmt.Errorf("failed to init local filesystem: %w", err)
 		}
-		L.Info().Str("path", localPath).Msg("blossom using local filesystem")
+		L.Info().Str("path", p).Msg("blossom using local filesystem")
 	}
 
 	blossomIndex = blossom.EventStoreBlobIndexWrapper{

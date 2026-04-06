@@ -69,22 +69,6 @@ var (
 	detector lingua.LanguageDetector
 )
 
-func initSearchIndexes(dataPath string, store eventstore.Store) error {
-	if dataPath == "" {
-		return fmt.Errorf("missing data path")
-	}
-	if store == nil {
-		return fmt.Errorf("missing RawEventStore")
-	}
-
-	path := filepath.Join(dataPath, "search")
-	if err := os.MkdirAll(path, 0755); err != nil {
-		return fmt.Errorf("failed to create search directory: %w", err)
-	}
-
-	return nil
-}
-
 func detectLanguageCode(content string) string {
 	if detector != nil {
 		if lang, ok := detector.DetectLanguageOf(content); ok {

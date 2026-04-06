@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"fiatjaf.com/croissant/global"
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/nip29"
 	"github.com/rs/zerolog/log"
@@ -217,7 +218,7 @@ func (g *Group) ensureIndex() (*BleveIndex, error) {
 	}
 
 	// load an index we already have on disk
-	indexPath := filepath.Join("search", g.Address.ID)
+	indexPath := filepath.Join(global.E.DataPath, "search", g.Address.ID)
 	langCode, ok, err := readLanguage(indexPath)
 	if err != nil {
 		return nil, err

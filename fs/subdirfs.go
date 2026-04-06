@@ -10,12 +10,12 @@ import (
 
 var _ FS = SubdirFS{}
 
-func NewSubdirFS(subdir string) (FS, error) {
-	if err := os.MkdirAll(subdir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create directory at %s", subdir)
+func NewSubdirFS(path string) (FS, error) {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create directory at %s", path)
 	}
 
-	return SubdirFS{subdir}, nil
+	return SubdirFS{path}, nil
 }
 
 type SubdirFS struct {
