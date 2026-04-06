@@ -1,0 +1,45 @@
+![](static/logo.png)
+
+## how to use
+
+set the environment variables (defaults shown):
+
+```
+PORT=9888
+HOST=127.0.0.1
+DATAPATH=data
+OWNER_PUBLIC_KEY=<must-be-set-to-a-hex-pubkey>
+DOMAIN=<can-be-left-empty-when-running-locally>
+```
+
+run it.
+
+the home page should allow you to log in. if you log in as the `OWNER_PUBLIC_KEY` you'll be able to edit other (optional) settings. those same settings will be on a file under `<DATAPATH>/settings.json`.
+
+## limiting who can create groups
+
+by default anyone can create groups, there is a default per-IP rate-limit that can be tweaked or dropped.
+
+one or more relays can be set as the source of who is authorized to create groups: only users who have a `kind:0` published to one of those relays will be allowed.
+
+## constraining access to groups
+
+if a group is not specifically set to `closed` that means anyone can automatically join.
+
+likewise, if a group is not specifically set to `restricted` that means anyone can publish to it even without joining.
+
+if you don't feel like making a group closed and restricted but still wants to have some limits on who can do these things, again the strategy of setting one or more relays as arbiters is available.
+
+## full-text search
+
+all groups have built-in search using a different index for each group.
+
+groups will have their language detected base on the first 10 messages sent to it and everything will be indexed based on that language going forward (this only makes some difference for stemming).
+
+## blossom
+
+blossom support has to be turned on.
+
+you can save files to the local filesystem or to a remote S3-like object storage server (Amazon S3, Backblaze B2, Minio and others).
+
+when saving to a remote place you can either proxy the media downloads (default) or you can redirect by setting up the redirect base URL to that of your S3 bucket.

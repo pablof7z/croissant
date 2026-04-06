@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/url"
 	"path"
-	"path/filepath"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore/mmm"
@@ -43,7 +42,8 @@ func initBlossom(relay *khatru.Relay, serviceURL string) error {
 		}
 		L.Info().Str("endpoint", global.S.Blossom.S3Endpoint).Str("bucket", global.S.Blossom.S3Bucket).Msg("blossom using s3")
 	} else {
-		p := filepath.Join(global.E.DataPath, global.S.Blossom.LocalPath)
+		// if the specified path is an absolute path we respect that, maybe the user has mapped that to some remote magic, who knows
+		p := filepathJoinWithAbsolute(global.E.DataPath, global.S.Blossom.LocalPath)
 		blossomFS, err = fs.NewSubdirFS(p)
 		if err != nil {
 			return fmt.Errorf("failed to init local filesystem: %w", err)
@@ -71,11 +71,11 @@ func initBlossom(relay *khatru.Relay, serviceURL string) error {
 				return nil, nil, err
 			}
 
-			redir.Path = path.Join(redir.Path, sha256+"."+ext)
+			redir.Path = path.Join(redir.Path, sha256+ext)
 			return nil, redir, nil
 		}
 
-		reader, err := blossomFS.Open(ctx, sha256+"."+ext)
+		reader, err := blossomFS.Open(ctx, sha256+ext)
 		return reader, nil, err
 	}
 	blossomServer.DeleteBlob = func(ctx context.Context, sha256 string, ext string) error {
@@ -93,4 +93,11 @@ func initBlossom(relay *khatru.Relay, serviceURL string) error {
 	}
 
 	return nil
+}
+
+func resetBlossom() {
+	blossomServer = nil
+	blossomIndex = blossom.EventStoreBlobIndexWrapper{}
+	blossomIndexDB = nil
+	blossomFS = nil
 }

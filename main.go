@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"net"
 	"net/http"
@@ -45,25 +44,13 @@ func main() {
 
 	detector = lingua.NewLanguageDetectorBuilder().FromLanguages(lingua.AllSpokenLanguages()...).Build()
 
-	relayBaseURL := global.S.RelayBaseURL(global.E.Host, global.E.Port)
-
-	global.R = khatru.NewRelay()
-	global.R.ServiceURL = relayBaseURL
-	global.R.Info.Name = global.S.RelayName
-	global.R.Info.Description = global.S.RelayDescription
-	global.R.Info.Contact = global.S.RelayContact
-	global.R.Info.Icon = global.S.RelayIcon
-	pk := global.S.RelaySecretKey.Public()
-	global.R.Info.PubKey = &pk
-	global.R.Info.Self = &pk
-	global.R.Info.AddSupportedNIP(29)
-
-	relayURL := global.S.RelayWSURL(global.E.Host, global.E.Port)
+	relayBaseURL := global.S.RelayBaseURL()
+	relayURL := global.S.RelayWSURL()
+	relay := khatru.NewRelay()
 
 	State = NewGroupsState(Options{
 		DB:        store,
 		SecretKey: global.S.RelaySecretKey,
-		Broadcast: global.R.BroadcastEvent,
 		RelayURL:  relayURL,
 		BaseURL:   relayBaseURL,
 		LiveKit: LiveKitSettings{
@@ -72,50 +59,20 @@ func main() {
 			APISecret: global.S.Groups.LiveKitAPISecret,
 		},
 	})
-
-	global.R.QueryStored = State.Query
-	global.R.StoreEvent = func(ctx context.Context, event nostr.Event) error {
-		return store.SaveEvent(event)
-	}
-	global.R.ReplaceEvent = func(ctx context.Context, event nostr.Event) error {
-		return store.ReplaceEvent(event)
-	}
-	global.R.DeleteEvent = func(ctx context.Context, id nostr.ID) error {
-		return store.DeleteEvent(id)
+	if err := configureRelay(relay, relayBaseURL); err != nil {
+		L.Fatal().Err(err).Msg("failed to initialize relay")
 	}
 
-	global.R.OnEvent = State.RejectEvent
-	global.R.OnEventSaved = State.HandleEventSaved
-	global.R.OnRequest = State.RequestAuthWhenNecessary
-	global.R.PreventBroadcast = State.ShouldPreventBroadcast
-
-	mux := global.R.Router()
-
-	// basic routes
-	mux.HandleFunc("GET /favicon.ico", faviconHandler)
-	mux.Handle("GET /static/", http.FileServer(http.FS(staticFiles)))
-	mux.HandleFunc("POST /settings", global.SettingsHandler)
-
-	// group page
-	mux.HandleFunc("GET /group/{id}", groupHandler)
-
-	// nip29 livekit
-	mux.HandleFunc("GET /.well-known/nip29/livekit", livekitStatusHandler)
-	mux.HandleFunc("GET /.well-known/nip29/livekit/{groupId}", livekitAuthHandler)
-	mux.HandleFunc("POST /groups/livekit/webhook", livekitWebhookHandler)
-
-	// home
-	mux.HandleFunc("GET /", homeHandler)
-
-	if global.S.Blossom.Enabled {
-		if err := initBlossom(global.R, relayBaseURL); err != nil {
-			L.Fatal().Err(err).Msg("failed to initialize blossom")
-		}
+	global.R = relay
+	relayHandler := &relayHandler{}
+	relayHandler.Set(relay)
+	global.ResetRelay = func() error {
+		return resetRelay(relayHandler)
 	}
 
 	addr := net.JoinHostPort(global.E.Host, global.E.Port)
 	L.Printf("listening on http://%s", addr)
-	handler := loggedUserMiddleware(global.R)
+	handler := loggedUserMiddleware(relayHandler)
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		L.Fatal().Err(err).Msg("server error")
 	}

@@ -18,7 +18,6 @@ var S Settings
 const DefaultBlossomLocalPath = "blossom-files"
 
 type Settings struct {
-	Domain           string          `json:"domain"`
 	RelayName        string          `json:"relay_name"`
 	RelayDescription string          `json:"relay_description"`
 	RelayContact     string          `json:"relay_contact"`
@@ -60,12 +59,7 @@ func (s Settings) RelayPublicKey() nostr.PubKey {
 }
 
 func (s Settings) HTTPScheme() string {
-	if s.Domain == "" {
-		return "http://"
-	}
-	if strings.HasPrefix(s.Domain, "127.0.0.1") ||
-		strings.HasPrefix(s.Domain, "0.0.0.0") ||
-		strings.HasPrefix(s.Domain, "localhost") {
+	if E.Domain == "" {
 		return "http://"
 	}
 	return "https://"
@@ -75,28 +69,28 @@ func (s Settings) WSScheme() string {
 	return "ws" + s.HTTPScheme()[4:]
 }
 
-func (s Settings) RelayBaseURL(host string, port string) string {
-	if s.Domain != "" {
-		return s.HTTPScheme() + s.Domain
+func (s Settings) RelayBaseURL() string {
+	if E.Domain != "" {
+		return s.HTTPScheme() + E.Domain
 	}
 
-	if host == "0.0.0.0" || host == "::" {
-		host = "localhost"
+	if E.Host == "0.0.0.0" || E.Host == "::" {
+		E.Host = "localE.Host"
 	}
 
-	return "http://" + net.JoinHostPort(host, port)
+	return "http://" + net.JoinHostPort(E.Host, E.Port)
 }
 
-func (s Settings) RelayWSURL(host string, port string) string {
-	if s.Domain != "" {
-		return s.WSScheme() + s.Domain
+func (s Settings) RelayWSURL() string {
+	if E.Domain != "" {
+		return s.WSScheme() + E.Domain
 	}
 
-	if host == "0.0.0.0" || host == "::" {
-		host = "localhost"
+	if E.Host == "0.0.0.0" || E.Host == "::" {
+		E.Host = "localE.Host"
 	}
 
-	return "ws://" + net.JoinHostPort(host, port)
+	return "ws://" + net.JoinHostPort(E.Host, E.Port)
 }
 
 func settingsPath(dataPath string) string {
@@ -259,10 +253,13 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 
 	S = updated
 	ConfigureGroupCreateRateLimit(S)
-	R.Info.Name = updated.RelayName
-	R.Info.Description = updated.RelayDescription
-	R.Info.Contact = updated.RelayContact
-	R.Info.Icon = updated.RelayIcon
+
+	if ResetRelay != nil {
+		if err := ResetRelay(); err != nil {
+			http.Error(w, "failed to reinitialize relay", http.StatusInternalServerError)
+			return
+		}
+	}
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

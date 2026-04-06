@@ -40,7 +40,7 @@ func GetLoggedUser(r *http.Request) (nostr.PubKey, bool) {
 		return nostr.ZeroPK, false
 	}
 
-	expectedDomain := S.Domain
+	expectedDomain := E.Domain
 	if expectedDomain == "" {
 		expectedDomain = r.Host
 	}

@@ -50,7 +50,7 @@ func (s *GroupsState) NewGroup(id string) *Group {
 
 func (s *GroupsState) loadGroupsFromDB() error {
 nextgroup:
-	for evt := range s.DB.QueryEvents(nostr.Filter{Kinds: []nostr.Kind{nostr.KindSimpleGroupCreateGroup}}, 5000) {
+	for evt := range s.DB.QueryEvents(nostr.Filter{Kinds: []nostr.Kind{nostr.KindSimpleGroupCreateGroup}}, 500_000) {
 		groupId, ok := getGroupIDFromEvent(evt)
 		if !ok {
 			continue
@@ -61,7 +61,7 @@ nextgroup:
 		for event := range s.DB.QueryEvents(nostr.Filter{
 			Kinds: nip29.ModerationEventKinds,
 			Tags:  nostr.TagMap{"h": []string{groupId}},
-		}, 50000) {
+		}, 50_000) {
 			if event.Kind == nostr.KindSimpleGroupDeleteGroup {
 				continue nextgroup
 			}
@@ -76,6 +76,22 @@ nextgroup:
 				continue
 			}
 			act.Apply(&group.Group)
+
+			// update AllMembers counts
+			switch act := act.(type) {
+			case nip29.PutUser:
+				for _, target := range act.Targets {
+					s.AllMembers.Compute(target.PubKey, func(count int, exists bool) (newV int, delete bool) {
+						return count + 1, false
+					})
+				}
+			case nip29.RemoveUser:
+				for _, targetPubKey := range act.Targets {
+					s.AllMembers.Compute(targetPubKey, func(count int, exists bool) (newV int, delete bool) {
+						return count - 1, count <= 1
+					})
+				}
+			}
 		}
 
 		i := 49
@@ -89,7 +105,7 @@ nextgroup:
 
 	for _, group := range s.Groups.Range {
 		for updated := range s.SyncGroupMetadataEvents(group) {
-			s.broadcast(updated)
+			global.R.BroadcastEvent(updated)
 		}
 	}
 

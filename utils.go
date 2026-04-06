@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"encoding/base64"
 	"io"
+	"path/filepath"
 	"slices"
 
 	"fiatjaf.com/nostr/nip29"
@@ -33,4 +34,16 @@ func randomToken(size int) string {
 		panic(err)
 	}
 	return base64.RawURLEncoding.EncodeToString(buf)
+}
+
+func filepathJoinWithAbsolute(parts ...string) string {
+	res := parts[0]
+	for _, p := range parts[1:] {
+		if filepath.IsAbs(p) {
+			res = p
+		} else {
+			res = filepath.Join(p)
+		}
+	}
+	return res
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"fiatjaf.com/croissant/global"
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/nip29"
 )
@@ -47,7 +48,7 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 				nostr.AppendUnique(groupsAffected, affected)
 			}
 
-			s.broadcast(addCreator)
+			global.R.BroadcastEvent(addCreator)
 		} else {
 			group = s.GetGroupFromEvent(event)
 			nostr.AppendUnique(groupsAffected, group)
@@ -135,7 +136,7 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 			nostr.AppendUnique(groupsAffected, affected)
 		}
 
-		s.broadcast(addUser)
+		global.R.BroadcastEvent(addUser)
 	}
 
 	// react to leave request
@@ -165,7 +166,7 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 				nostr.AppendUnique(groupsAffected, affected)
 			}
 
-			s.broadcast(removeUser)
+			global.R.BroadcastEvent(removeUser)
 		}
 	}
 

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"fiatjaf.com/croissant/global"
 	"fiatjaf.com/nostr"
 	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/webhook"
@@ -186,7 +187,7 @@ func livekitWebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 		evt.Sign(State.secretKey)
 		State.DB.ReplaceEvent(evt)
-		State.broadcast(evt)
+		global.R.BroadcastEvent(evt)
 		return
 	default:
 		return

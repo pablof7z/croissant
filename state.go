@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"fiatjaf.com/croissant/global"
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru"
@@ -22,7 +23,6 @@ type LiveKitSettings struct {
 type Options struct {
 	DB        eventstore.Store
 	SecretKey nostr.SecretKey
-	Broadcast func(nostr.Event) int
 	RelayURL  string
 	BaseURL   string
 	LiveKit   LiveKitSettings
@@ -41,7 +41,6 @@ type GroupsState struct {
 	deletedCacheIndex atomic.Uint32
 
 	secretKey nostr.SecretKey
-	broadcast func(nostr.Event) int
 }
 
 func NewGroupsState(opts Options) *GroupsState {
@@ -53,7 +52,6 @@ func NewGroupsState(opts Options) *GroupsState {
 		baseURL:    opts.BaseURL,
 		livekit:    opts.LiveKit,
 		secretKey:  opts.SecretKey,
-		broadcast:  opts.Broadcast,
 	}
 
 	if err := state.loadGroupsFromDB(); err != nil {
@@ -63,10 +61,16 @@ func NewGroupsState(opts Options) *GroupsState {
 	return state
 }
 
+func (s *GroupsState) UpdateRuntimeConfig(relayURL string, baseURL string, livekit LiveKitSettings) {
+	s.relayURL = relayURL
+	s.baseURL = baseURL
+	s.livekit = livekit
+}
+
 func (s *GroupsState) HandleEventSaved(ctx context.Context, event nostr.Event) {
 	for _, affectedGroup := range s.ProcessEvent(ctx, event) {
 		for updated := range s.SyncGroupMetadataEvents(affectedGroup) {
-			s.broadcast(updated)
+			global.R.BroadcastEvent(updated)
 		}
 	}
 
