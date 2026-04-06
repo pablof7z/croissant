@@ -141,7 +141,7 @@ templ home() {
 				</div>
 				<div x-data={ fmt.Sprintf("{ blossomEnabled: %t }", global.S.Blossom.Enabled) }>
 					<label class="block text-sm font-medium text-stone-700 mb-1.5">Blossom Storage</label>
-					<p class="text-xs text-stone-500 mb-3">File upload functionality for members of all groups.</p>
+					<p class="text-xs text-stone-500 mb-3">File upload functionality will be available for all members of all groups.</p>
 					<div class="flex items-center gap-2 mb-4">
 						<input
 							type="checkbox"
@@ -166,9 +166,10 @@ templ home() {
 								placeholder="blossom-files"
 								class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
 							/>
+							<p class="text-xs text-stone-500 mt-1">This will be used unless S3 is set up. Can't be blank.</p>
 						</div>
 						<div class="border-t border-stone-200 pt-4">
-							<label class="block text-xs font-medium text-stone-600 mb-2">S3 Configuration (optional - defaults to local filesystem)</label>
+							<label class="block text-xs font-medium text-stone-600 mb-2">S3 Configuration</label>
 							<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<div>
 									<label class="block text-xs text-stone-500 mb-1">Endpoint</label>
@@ -176,7 +177,7 @@ templ home() {
 										type="text"
 										name="blossom_s3_endpoint"
 										value={ global.S.Blossom.S3Endpoint }
-										placeholder="s3.amazonaws.com"
+										placeholder="s3.us-west-001.backblazeb2.com"
 										class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
 									/>
 								</div>
@@ -212,6 +213,17 @@ templ home() {
 										class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
 									/>
 								</div>
+							</div>
+							<div class="mt-4">
+								<label class="block text-xs text-stone-500 mb-1">Redirect Base URL (optional)</label>
+								<input
+									type="text"
+									name="blossom_s3_redirect_base_url"
+									value={ global.S.Blossom.S3RedirectBaseURL }
+									placeholder="https://blossom-bucket.s3.us-east-1.amazonaws.com"
+									class="w-full px-4 py-2.5 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-150"
+								/>
+								<p class="text-xs text-stone-500 mt-1">/&lt;sha256&gt;.&lt;ext&gt will be appended to it. See <a href="https://github.com/hzrd149/blossom/blob/master/buds/01.md#proxying-and-redirection-optional" target="_blank" class="font-semibold hover:underline">Header requirements</a>. If this is not set the server will proxy all blob access through itself.</p>
 							</div>
 						</div>
 					</div>

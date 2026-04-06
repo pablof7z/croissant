@@ -15,6 +15,8 @@ import (
 
 var S Settings
 
+const DefaultBlossomLocalPath = "blossom-files"
+
 type Settings struct {
 	Domain           string          `json:"domain"`
 	RelayName        string          `json:"relay_name"`
@@ -25,12 +27,13 @@ type Settings struct {
 	OwnerPubKey      nostr.PubKey    `json:"owner_pubkey"`
 
 	Blossom struct {
-		Enabled    bool   `json:"enabled"`
-		S3Endpoint string `json:"s3_endpoint"`
-		S3KeyID    string `json:"s3_key_id"`
-		S3Secret   string `json:"s3_secret"`
-		S3Bucket   string `json:"s3_bucket"`
-		LocalPath  string `json:"local_path"`
+		Enabled           bool   `json:"enabled"`
+		S3Endpoint        string `json:"s3_endpoint"`
+		S3KeyID           string `json:"s3_key_id"`
+		S3Secret          string `json:"s3_secret"`
+		S3Bucket          string `json:"s3_bucket"`
+		S3RedirectBaseURL string `json:"s3_redirect_base_url"`
+		LocalPath         string `json:"local_path"`
 	} `json:"blossom"`
 
 	Groups struct {
@@ -121,6 +124,7 @@ func loadSettings(dataPath string) (Settings, error) {
 		settings.Groups.CreateGroupRateLimit.TokensPerInterval = 1
 		settings.Groups.CreateGroupRateLimit.IntervalSeconds = 10800
 		settings.Groups.CreateGroupRateLimit.MaxTokens = 3
+		settings.Blossom.LocalPath = DefaultBlossomLocalPath
 
 		if err := settings.save(dataPath); err != nil {
 			return Settings{}, err
@@ -136,6 +140,13 @@ func loadSettings(dataPath string) (Settings, error) {
 
 	if settings.RelaySecretKey == [32]byte{} {
 		settings.RelaySecretKey = nostr.Generate()
+		if err := settings.save(dataPath); err != nil {
+			return Settings{}, err
+		}
+	}
+
+	if settings.Blossom.LocalPath == "" {
+		settings.Blossom.LocalPath = DefaultBlossomLocalPath
 		if err := settings.save(dataPath); err != nil {
 			return Settings{}, err
 		}
@@ -230,11 +241,16 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 	updated.Groups.FreeTransitPresenceRelays = parseCSV("free_transit_presence_relays")
 
 	updated.Blossom.Enabled = r.FormValue("blossom_enabled") == "true"
-	updated.Blossom.LocalPath = strings.TrimSpace(r.FormValue("blossom_local_path"))
+	localPath := strings.TrimSpace(r.FormValue("blossom_local_path"))
+	if localPath == "" {
+		localPath = DefaultBlossomLocalPath
+	}
+	updated.Blossom.LocalPath = localPath
 	updated.Blossom.S3Endpoint = strings.TrimSpace(r.FormValue("blossom_s3_endpoint"))
 	updated.Blossom.S3Bucket = strings.TrimSpace(r.FormValue("blossom_s3_bucket"))
 	updated.Blossom.S3KeyID = strings.TrimSpace(r.FormValue("blossom_s3_key_id"))
 	updated.Blossom.S3Secret = strings.TrimSpace(r.FormValue("blossom_s3_secret"))
+	updated.Blossom.S3RedirectBaseURL = strings.TrimSpace(r.FormValue("blossom_s3_redirect_base_url"))
 
 	if err := updated.save(E.DataPath); err != nil {
 		http.Error(w, "failed to save settings", http.StatusInternalServerError)

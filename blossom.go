@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"path/filepath"
+	"path"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore/mmm"
@@ -44,7 +44,7 @@ func initBlossom(relay *khatru.Relay, serviceURL string) error {
 	} else {
 		localPath := global.S.Blossom.LocalPath
 		if localPath == "" {
-			localPath = filepath.Join(global.E.DataPath, "blossom-files")
+			localPath = global.DefaultBlossomLocalPath
 		}
 		blossomFS, err = fs.NewSubdirFS(localPath)
 		if err != nil {
@@ -65,7 +65,19 @@ func initBlossom(relay *khatru.Relay, serviceURL string) error {
 		return blossomFS.Save(ctx, sha256+ext, body)
 	}
 	blossomServer.LoadBlob = func(ctx context.Context, sha256 string, ext string) (io.ReadSeeker, *url.URL, error) {
-		reader, err := blossomFS.Open(ctx, sha256+ext)
+		if global.S.Blossom.S3RedirectBaseURL != "" {
+			redir, err := url.Parse(global.S.Blossom.S3RedirectBaseURL)
+			if err != nil {
+				L.Warn().Err(err).Str("base_url", global.S.Blossom.S3RedirectBaseURL).
+					Msg("blossom redirect base url invalid")
+				return nil, nil, err
+			}
+
+			redir.Path = path.Join(redir.Path, sha256+"."+ext)
+			return nil, redir, nil
+		}
+
+		reader, err := blossomFS.Open(ctx, sha256+"."+ext)
 		return reader, nil, err
 	}
 	blossomServer.DeleteBlob = func(ctx context.Context, sha256 string, ext string) error {
