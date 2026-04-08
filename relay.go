@@ -61,6 +61,7 @@ func configureRelay(relay *khatru.Relay, relayBaseURL string) error {
 	mux.HandleFunc("GET /favicon.ico", faviconHandler)
 	mux.Handle("GET /static/", http.FileServer(http.FS(staticFiles)))
 	mux.HandleFunc("POST /settings", global.SettingsHandler)
+	mux.HandleFunc("POST /group/{id}/wipeout", wipeGroupHandler)
 
 	// group page
 	mux.HandleFunc("GET /group/{id}", groupHandler)

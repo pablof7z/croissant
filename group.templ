@@ -24,6 +24,8 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loggedUser := global.LoggedUserFromContext(r.Context())
+
 	count := -1
 	lastEventText := ""
 
@@ -47,12 +49,12 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 		[]string{group.Address.Relay},
 	)
 
-	if err := groupPage(group, count, lastEventText, naddr).Render(r.Context(), w); err != nil {
+	if err := groupPage(group, loggedUser, count, lastEventText, naddr).Render(r.Context(), w); err != nil {
 		L.Error().Err(err).Msg("failed to render group page")
 	}
 }
 
-templ groupPage(group *Group, count int, lastEventText string, naddr string) {
+templ groupPage(group *Group, loggedUser nostr.PubKey, count int, lastEventText string, naddr string) {
 	@layout(group.Name) {
 		<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
 			<div class="flex gap-4">
@@ -162,5 +164,16 @@ templ groupPage(group *Group, count int, lastEventText string, naddr string) {
 				<a href={ "https://chachi.chat/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">chachi.chat</a>
 			</div>
 		</div>
+		if loggedUser == global.S.OwnerPubKey {
+			<div class="bg-white rounded-xl shadow-sm border border-red-200 p-6">
+				<h2 class="text-lg font-semibold text-stone-800">Danger Zone</h2>
+				<p class="text-sm text-stone-600 mt-2">Delete this group, members, and all events. This cannot be undone.</p>
+				<form method="POST" action={ "/group/" + group.Address.ID + "/wipeout" } onsubmit="return confirm('This will delete this group and all its events. Continue?');" class="mt-4">
+					<button type="submit" class="cursor-pointer w-full sm:w-auto px-6 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors duration-150 shadow-sm">
+						Wipe Group
+					</button>
+				</form>
+			</div>
+		}
 	}
 }
