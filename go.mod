@@ -3,7 +3,7 @@ module fiatjaf.com/croissant
 go 1.25.0
 
 require (
-	fiatjaf.com/nostr v0.0.0-20260403153006-371cecdb8498
+	fiatjaf.com/nostr v0.0.0-20260414225817-c11e94a04b21
 	github.com/a-h/templ v0.3.1001
 	github.com/blevesearch/bleve/v2 v2.4.4
 	github.com/hashicorp/golang-lru/v2 v2.0.7

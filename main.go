@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/eventstore/bleve"
 	"fiatjaf.com/nostr/eventstore/mmm"
 	"fiatjaf.com/nostr/khatru"
 	"github.com/pemistahl/lingua-go"
@@ -21,7 +22,7 @@ var (
 	mmmm           *mmm.MultiMmapManager
 	store          *mmm.IndexingLayer
 	L              = global.L
-	pool           = nostr.NewPool(nostr.PoolOptions{})
+	pool           = nostr.NewPool()
 )
 
 func loggedUserMiddleware(next http.Handler) http.Handler {
@@ -42,7 +43,7 @@ func main() {
 	}
 	defer mmmm.Close()
 
-	detector = lingua.NewLanguageDetectorBuilder().FromLanguages(lingua.AllSpokenLanguages()...).Build()
+	detector = lingua.NewLanguageDetectorBuilder().FromLanguages(bleve.SupportedLanguages...).Build()
 
 	relayBaseURL := global.S.RelayBaseURL()
 	relayURL := global.S.RelayWSURL()

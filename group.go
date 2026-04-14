@@ -10,7 +10,9 @@ import (
 
 	"fiatjaf.com/croissant/global"
 	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/eventstore/bleve"
 	"fiatjaf.com/nostr/nip29"
+	"github.com/pemistahl/lingua-go"
 	"github.com/rs/zerolog/log"
 )
 
@@ -27,7 +29,7 @@ type Group struct {
 	last50index atomic.Int32
 
 	searchLanguage string
-	searchIndex    *BleveIndex
+	searchIndex    *bleve.BleveBackend
 }
 
 func (s *GroupsState) NewGroup(id string) *Group {
@@ -154,7 +156,7 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event
 
 			event.Sign(s.secretKey)
 
-			if err := s.DB.ReplaceEvent(event); err != nil {
+			if _, err := s.DB.ReplaceEvent(event); err != nil {
 				L.Error().Int("kind", int(event.Kind.Num())).Err(err).Msg("failed to save group metadata event")
 			}
 			if event.CreatedAt > now-180 {
@@ -227,7 +229,7 @@ func (g *Group) SearchEvents(filter nostr.Filter, maxLimit int) iter.Seq[nostr.E
 	return func(yield func(nostr.Event) bool) {}
 }
 
-func (g *Group) ensureIndex() (*BleveIndex, error) {
+func (g *Group) ensureIndex() (*bleve.BleveBackend, error) {
 	// we already have the index on memory?
 	if g.searchIndex != nil {
 		return g.searchIndex, nil
@@ -239,11 +241,16 @@ func (g *Group) ensureIndex() (*BleveIndex, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if ok {
-		g.searchIndex = &BleveIndex{
-			Path:          indexPath,
-			Language:      langCode,
-			RawEventStore: store,
+		isoCode := lingua.GetIsoCode639_1FromValue(langCode)
+		lang := lingua.GetLanguageFromIsoCode639_1(isoCode)
+
+		g.searchIndex = &bleve.BleveBackend{
+			Path:           indexPath,
+			Languages:      []lingua.Language{lang},
+			IndexableKinds: indexableKinds,
+			RawEventStore:  store,
 		}
 		if err := g.searchIndex.Init(); err != nil {
 			return nil, err
@@ -265,12 +272,13 @@ func (g *Group) ensureIndex() (*BleveIndex, error) {
 	}
 
 	events, combinedContent := g.collectGroupContent(count)
-	langCode = detectLanguageCode(combinedContent)
+	lang := detectLanguage(combinedContent)
 
-	g.searchIndex = &BleveIndex{
-		Path:          indexPath,
-		Language:      langCode,
-		RawEventStore: store,
+	g.searchIndex = &bleve.BleveBackend{
+		Path:           indexPath,
+		Languages:      []lingua.Language{lang},
+		IndexableKinds: indexableKinds,
+		RawEventStore:  store,
 	}
 	if err := g.searchIndex.Init(); err != nil {
 		return nil, err

@@ -44,7 +44,8 @@ func configureRelay(relay *khatru.Relay, relayBaseURL string) error {
 		return store.SaveEvent(event)
 	}
 	relay.ReplaceEvent = func(ctx context.Context, event nostr.Event) error {
-		return store.ReplaceEvent(event)
+		_, err := store.ReplaceEvent(event)
+		return err
 	}
 	relay.DeleteEvent = func(ctx context.Context, id nostr.ID) error {
 		return store.DeleteEvent(id)
