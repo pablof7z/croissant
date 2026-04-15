@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"iter"
+	"slices"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/khatru"
@@ -13,6 +14,19 @@ func (s *GroupsState) Query(ctx context.Context, filter nostr.Filter) iter.Seq[n
 		authed := khatru.GetAllAuthed(ctx)
 
 		if filter.Search != "" {
+			if filter.Kinds != nil && slices.Contains(filter.Kinds, nostr.KindSimpleGroupMetadata) {
+				for evt := range GlobalSearchIndex.QueryEvents(filter, 40) {
+					if group := State.GetGroupFromEvent(evt); group != nil {
+						if !group.Hidden || group.AnyOfTheseIsAMember(authed) {
+							if !yield(evt) {
+								return
+							}
+						}
+					}
+				}
+				return
+			}
+
 			groupIDs, _ := filter.Tags["h"]
 			if len(groupIDs) > 0 && len(groupIDs) < 5 {
 				for _, groupId := range groupIDs {

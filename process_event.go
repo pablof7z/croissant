@@ -88,7 +88,7 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 					idx := s.deletedCacheIndex.Add(1) % uint32(len(s.deletedCache))
 					s.deletedCache[idx] = id
 
-					if err := group.DeindexEvent(id); err != nil {
+					if err := group.searchIndex.DeleteEvent(id); err != nil {
 						L.Warn().Err(err).Str("group", group.Address.ID).Str("target", id.Hex()).Msg("failed to delete event from search index")
 					}
 				}

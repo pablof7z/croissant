@@ -156,8 +156,20 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event
 
 			event.Sign(s.secretKey)
 
-			if _, err := s.DB.ReplaceEvent(event); err != nil {
+			if deleted, err := s.DB.ReplaceEvent(event); err != nil {
 				L.Error().Int("kind", int(event.Kind.Num())).Err(err).Msg("failed to save group metadata event")
+			} else {
+				if event.Kind == nostr.KindSimpleGroupMetadata {
+					for _, del := range deleted {
+						if err := GlobalSearchIndex.DeleteEvent(del.ID); err != nil {
+							L.Error().Int("kind", int(event.Kind.Num())).Err(err).Msg("failed to deindex group metadata event")
+						}
+					}
+				}
+
+				if err := GlobalSearchIndex.SaveEvent(event); err != nil {
+					L.Error().Int("kind", int(event.Kind.Num())).Err(err).Msg("failed to index group metadata event")
+				}
 			}
 			if event.CreatedAt > now-180 {
 				if !yield(event) {
@@ -196,14 +208,6 @@ func (g *Group) IndexEvent(event nostr.Event) error {
 	return index.SaveEvent(event)
 }
 
-func (g *Group) DeindexEvent(id nostr.ID) error {
-	if g.searchIndex != nil {
-		return g.searchIndex.DeleteEvent(id)
-	}
-
-	return nil
-}
-
 func (g *Group) SearchEvents(filter nostr.Filter, maxLimit int) iter.Seq[nostr.Event] {
 	// ensure we're only filtering for supported kinds (or nothing)
 	if filter.Kinds != nil {
@@ -216,6 +220,7 @@ func (g *Group) SearchEvents(filter nostr.Filter, maxLimit int) iter.Seq[nostr.E
 			}
 		}
 	}
+
 	if len(filter.Kinds) == 0 {
 		return func(yield func(nostr.Event) bool) {}
 	}
