@@ -30,13 +30,13 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 	lastEventText := ""
 
 	if !group.Private {
-		countV, err := State.DB.CountEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}})
+		countV, err := store.CountEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}})
 		if err != nil {
 			L.Warn().Err(err).Str("group", group.Address.ID).Msg("failed to count group events")
 		}
 		count = int(countV)
 
-		for event := range State.DB.QueryEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}, Limit: 1}, 1) {
+		for event := range store.QueryEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}, Limit: 1}, 1) {
 			lastEventText = time.Unix(int64(event.CreatedAt), 0).Format("Jan 2, 2006 15:04")
 			break
 		}

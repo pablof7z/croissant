@@ -39,7 +39,7 @@ func configureRelay(relay *khatru.Relay, relayBaseURL string) error {
 	relay.Info.Self = &pk
 	relay.Info.AddSupportedNIP(29)
 
-	relay.QueryStored = State.Query
+	relay.QueryStored = query
 	relay.StoreEvent = func(ctx context.Context, event nostr.Event) error {
 		return store.SaveEvent(event)
 	}
@@ -51,10 +51,10 @@ func configureRelay(relay *khatru.Relay, relayBaseURL string) error {
 		return store.DeleteEvent(id)
 	}
 
-	relay.OnEvent = State.RejectEvent
-	relay.OnEventSaved = State.HandleEventSaved
-	relay.OnRequest = State.RequestAuthWhenNecessary
-	relay.PreventBroadcast = State.ShouldPreventBroadcast
+	relay.OnEvent = rejectEvent
+	relay.OnEventSaved = handleEventSaved
+	relay.OnRequest = rejectRequest
+	relay.PreventBroadcast = shouldPreventBroadcast
 
 	mux := relay.Router()
 

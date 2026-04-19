@@ -43,3 +43,9 @@ blossom support has to be turned on.
 you can save files to the local filesystem or to a remote S3-like object storage server (Amazon S3, Backblaze B2, Minio and others).
 
 when saving to a remote place you can either proxy the media downloads (default) or you can redirect by setting up the redirect base URL to that of your S3 bucket.
+
+## gift-wraps
+
+support for `kind:1059` gift-wraps (NIP-17 DMs) has to be turned on.
+
+by default any messages to and from anyone will be accepted. but the same relay presence logic used for limiting group creation can be used, in which case both sender (based on `AUTH` instead of the event `pubkey`) and the receiver (based on the `"p"` tag) will be checked.

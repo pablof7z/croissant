@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync/atomic"
 
 	"fiatjaf.com/croissant/global"
@@ -67,32 +68,46 @@ func (s *GroupsState) UpdateRuntimeConfig(relayURL string, baseURL string, livek
 	s.livekit = livekit
 }
 
-func (s *GroupsState) HandleEventSaved(ctx context.Context, event nostr.Event) {
-	for _, affectedGroup := range s.ProcessEvent(ctx, event) {
-		for updated := range s.SyncGroupMetadataEvents(affectedGroup) {
+func handleEventSaved(ctx context.Context, event nostr.Event) {
+	for _, affectedGroup := range State.ProcessEvent(ctx, event) {
+		for updated := range State.SyncGroupMetadataEvents(affectedGroup) {
 			global.R.BroadcastEvent(updated)
 		}
 	}
 
-	if group := s.GetGroupFromEvent(event); group != nil {
+	if group := State.GetGroupFromEvent(event); group != nil {
 		if err := group.IndexEvent(event); err != nil {
 			L.Warn().Err(err).Str("group", group.Address.ID).Msg("failed to index event")
 		}
 	}
 }
 
-func (s *GroupsState) RequestAuthWhenNecessary(
+func rejectRequest(
 	ctx context.Context,
 	filter nostr.Filter,
 ) (reject bool, msg string) {
 	authed := khatru.GetAllAuthed(ctx)
+	if slices.Contains(filter.Kinds, nostr.Kind(1059)) {
+		if len(authed) == 0 {
+			return true, "auth-required: you're trying to access gift-wraps"
+		}
+
+		if !authedAreTheSameAsPTagged(authed, filter.Tags["p"]) {
+			return true, "blocked: gift-wrap queries must only be done for events that p-tag the current user"
+		}
+	}
+
 	groupIds, _ := filter.Tags["h"]
 	if len(groupIds) == 0 {
 		groupIds, _ = filter.Tags["d"]
 	}
 
+	if filter.Search != "" && (len(groupIds) > 5 || len(groupIds) == 0) {
+		return true, "blocked: group search must specify between 1 and 5 group ids"
+	}
+
 	for _, groupId := range groupIds {
-		if group, ok := s.Groups.Load(groupId); ok {
+		if group, ok := State.Groups.Load(groupId); ok {
 			if group.Private {
 				if len(authed) == 0 {
 					return true, "auth-required: you're trying to access a private group"

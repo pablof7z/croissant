@@ -186,7 +186,7 @@ func livekitWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		group.mu.Unlock()
 
 		evt.Sign(State.secretKey)
-		State.DB.ReplaceEvent(evt)
+		store.ReplaceEvent(evt)
 		global.R.BroadcastEvent(evt)
 		return
 	default:

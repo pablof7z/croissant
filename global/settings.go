@@ -48,6 +48,11 @@ type Settings struct {
 		} `json:"create_group_rate_limit"`
 	} `json:"groups"`
 
+	GiftWraps struct {
+		Enabled              bool     `json:"enabled"`
+		SenderPresenceRelays []string `json:"sender_presence_relays"`
+	} `json:"gift_wraps"`
+
 	relayPublicKey nostr.PubKey
 }
 
@@ -233,6 +238,8 @@ func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 
 	updated.Groups.CreateGroupPresenceRelays = parseCSV("create_group_presence_relays")
 	updated.Groups.FreeTransitPresenceRelays = parseCSV("free_transit_presence_relays")
+	updated.GiftWraps.Enabled = r.FormValue("gift_wraps_enabled") == "true"
+	updated.GiftWraps.SenderPresenceRelays = parseCSV("gift_wraps_sender_presence_relays")
 
 	updated.Blossom.Enabled = r.FormValue("blossom_enabled") == "true"
 	localPath := strings.TrimSpace(r.FormValue("blossom_local_path"))

@@ -4,35 +4,68 @@ import (
 	"context"
 	"time"
 
+	"fiatjaf.com/croissant/global"
 	"fiatjaf.com/nostr"
-	"github.com/hashicorp/golang-lru/v2"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
-const freeTransitPresenceCacheSize = 2048
-
-var freeTransitPresenceCache *lru.Cache[nostr.PubKey, bool]
+var (
+	freeTransitPresenceCache *lru.Cache[nostr.PubKey, bool]
+	giftWrapPresenceCache    *lru.Cache[nostr.PubKey, bool]
+)
 
 func init() {
-	cache, err := lru.New[nostr.PubKey, bool](freeTransitPresenceCacheSize)
-	if err != nil {
-		panic(err)
+	{
+		cache, err := lru.New[nostr.PubKey, bool](2048)
+		if err != nil {
+			panic(err)
+		}
+		freeTransitPresenceCache = cache
 	}
-	freeTransitPresenceCache = cache
+
+	{
+		cache, err := lru.New[nostr.PubKey, bool](2048)
+		if err != nil {
+			panic(err)
+		}
+		giftWrapPresenceCache = cache
+	}
 }
 
-func hasPresence(ctx context.Context, relays []string, pubkey nostr.PubKey, isFreeTransit bool) bool {
+type CheckType int
+
+const (
+	CheckTypeFreeTransit CheckType = iota
+	CheckTypeGroupCreate
+	CheckTypeGiftWrap
+)
+
+//go:inline
+func hasPresence(ctx context.Context, pubkey nostr.PubKey, checkType CheckType) bool {
+	var relays []string
+	var cache *lru.Cache[nostr.PubKey, bool]
+	switch checkType {
+	case CheckTypeFreeTransit:
+		relays = global.S.Groups.FreeTransitPresenceRelays
+		if v, ok := freeTransitPresenceCache.Get(pubkey); ok {
+			return v
+		}
+		cache = freeTransitPresenceCache
+	case CheckTypeGiftWrap:
+		relays = global.S.GiftWraps.SenderPresenceRelays
+		if v, ok := giftWrapPresenceCache.Get(pubkey); ok {
+			return v
+		}
+		cache = giftWrapPresenceCache
+	case CheckTypeGroupCreate:
+		relays = global.S.Groups.CreateGroupPresenceRelays
+	}
+
 	if len(relays) == 0 {
-		// if nothing is specified anyone is allowed
 		return true
 	}
 
-	if isFreeTransit {
-		if value, ok := freeTransitPresenceCache.Get(pubkey); ok {
-			return value
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	filter := nostr.Filter{
@@ -41,10 +74,15 @@ func hasPresence(ctx context.Context, relays []string, pubkey nostr.PubKey, isFr
 		Limit:   1,
 	}
 
-	result := pool.QuerySingle(ctx, relays, filter, nostr.SubscriptionOptions{})
+	result := pool.QuerySingle(ctx, relays, filter, nostr.SubscriptionOptions{
+		Label: "croissant/presence-check",
+	})
+
 	present := result != nil
-	if isFreeTransit {
-		freeTransitPresenceCache.Add(pubkey, present)
+
+	if cache != nil {
+		cache.Add(pubkey, present)
 	}
+
 	return present
 }
