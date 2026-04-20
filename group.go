@@ -150,10 +150,6 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event
 			group.ToMembersEvent(),
 			group.ToRolesEvent(),
 		} {
-			if group.Private && event.Kind == nostr.KindSimpleGroupMembers {
-				continue
-			}
-
 			event.Sign(s.secretKey)
 
 			if deleted, err := s.DB.ReplaceEvent(event); err != nil {
