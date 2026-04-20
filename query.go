@@ -5,6 +5,7 @@ import (
 	"iter"
 	"slices"
 
+	"fiatjaf.com/croissant/global"
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/khatru"
 )
@@ -53,7 +54,7 @@ func query(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
 		// normal group query
 		return func(yield func(nostr.Event) bool) {
 			for evt := range store.QueryEvents(filter, 1500) {
-				if hideEventFromReader(evt, authed) {
+				if hideEventFromReader(filter, evt, authed) {
 					continue
 				}
 
@@ -67,23 +68,54 @@ func query(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
 
 //go:inline
 func shouldPreventBroadcast(ws *khatru.WebSocket, filter nostr.Filter, event nostr.Event) bool {
-	return hideEventFromReader(event, ws.AuthedPublicKeys)
+	return hideEventFromReader(filter, event, ws.AuthedPublicKeys)
 }
 
 //go:inline
-func hideEventFromReader(evt nostr.Event, authed []nostr.PubKey) bool {
+func hideEventFromReader(filter nostr.Filter, evt nostr.Event, authed []nostr.PubKey) bool {
 	group := State.GetGroupFromEvent(evt)
 	if nil == group {
 		return true
 	}
 
-	if group.AnyOfTheseIsAMember(authed) {
-		return false
+	if group.Hidden {
+		// 'hidden' works only by hiding the group from abrangent queries like listing all groups in a relay etc
+		if requestedGroupIds(filter) == nil {
+			return true
+		}
+
+		// if specific groups were requested then the 'hidden' field has no effect as the reader
+		// already knows about the existence of the group
+		// <pass>
 	}
 
-	if group.Hidden {
-		return true
+	if group.Private {
+		// 'private' works by hiding group contents (and member lists etc), but not group metadata
+		// group metadata is still public.
+		// actually nevermind, let's make it toggleable by the person running the relay.
+		if evt.Kind == nostr.KindSimpleGroupMetadata {
+			if global.S.Groups.PrivateGroupsMetadataHidden {
+				return true
+			} else {
+				// metadata is allowed
+				// <pass>
+			}
+		} else {
+			// allow reading for members only
+			if group.AnyOfTheseIsAMember(authed) {
+				return false
+			}
+		}
 	}
 
 	return false
+}
+
+//go:inline
+func requestedGroupIds(filter nostr.Filter) []string {
+	groupIds, _ := filter.Tags["h"]
+	if len(groupIds) == 0 {
+		groupIds, _ = filter.Tags["d"]
+	}
+	return groupIds
 }

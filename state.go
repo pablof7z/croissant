@@ -100,11 +100,7 @@ func rejectRequest(
 	}
 
 	// nip29
-	groupIds, _ := filter.Tags["h"]
-	if len(groupIds) == 0 {
-		groupIds, _ = filter.Tags["d"]
-	}
-
+	groupIds := requestedGroupIds(filter)
 	if filter.Search != "" && (len(groupIds) > 5 || len(groupIds) == 0) {
 		return true, "blocked: group search must specify between 1 and 5 group ids"
 	}

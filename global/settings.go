@@ -46,6 +46,7 @@ type Settings struct {
 			IntervalSeconds   int `json:"interval_seconds"`
 			MaxTokens         int `json:"max_tokens"`
 		} `json:"create_group_rate_limit"`
+		PrivateGroupsMetadataHidden bool `json:"private_groups_metadata_hidden"`
 	} `json:"groups"`
 
 	GiftWraps struct {
