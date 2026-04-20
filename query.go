@@ -77,13 +77,12 @@ func hideEventFromReader(evt nostr.Event, authed []nostr.PubKey) bool {
 		return true
 	}
 
-	// filtering by checking if a user is a member of a group (when 'private') is already done by
-	// s.RequestAuthWhenNecessary(), so we don't have to do it here
-	// assume the requester has access to all these groups
-	if !group.Hidden && !group.Private {
+	if group.AnyOfTheseIsAMember(authed) {
 		return false
-	} else if group.AnyOfTheseIsAMember(authed) {
-		return false
+	}
+
+	if group.Hidden {
+		return true
 	}
 
 	return false

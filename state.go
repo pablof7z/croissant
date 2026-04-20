@@ -87,6 +87,8 @@ func rejectRequest(
 	filter nostr.Filter,
 ) (reject bool, msg string) {
 	authed := khatru.GetAllAuthed(ctx)
+
+	// nip17
 	if slices.Contains(filter.Kinds, nostr.Kind(1059)) {
 		if len(authed) == 0 {
 			return true, "auth-required: you're trying to access gift-wraps"
@@ -97,6 +99,7 @@ func rejectRequest(
 		}
 	}
 
+	// nip29
 	groupIds, _ := filter.Tags["h"]
 	if len(groupIds) == 0 {
 		groupIds, _ = filter.Tags["d"]
