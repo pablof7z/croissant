@@ -32,6 +32,12 @@ type Group struct {
 	searchIndex    *bleve.BleveBackend
 }
 
+type DeletedGroup struct {
+	ID        string
+	DeletedAt nostr.Timestamp
+	DeletedBy nostr.PubKey
+}
+
 func (s *GroupsState) NewGroup(id string) *Group {
 	return &Group{
 		Group: nip29.Group{
@@ -65,6 +71,11 @@ nextgroup:
 			Tags:  nostr.TagMap{"h": []string{groupId}},
 		}, 50_000) {
 			if event.Kind == nostr.KindSimpleGroupDeleteGroup {
+				s.deletedGroups.Store(groupId, &DeletedGroup{
+					ID:        groupId,
+					DeletedAt: event.CreatedAt,
+					DeletedBy: event.PubKey,
+				})
 				continue nextgroup
 			}
 			events = append(events, event)
@@ -103,6 +114,7 @@ nextgroup:
 		}
 
 		s.Groups.Store(group.Address.ID, group)
+		s.deletedGroups.Delete(group.Address.ID)
 	}
 
 	for _, group := range s.Groups.Range {
@@ -112,6 +124,36 @@ nextgroup:
 	}
 
 	return nil
+}
+
+func (s *GroupsState) LoadDeletedGroupState(groupID string) (*Group, *DeletedGroup, error) {
+	deletedGroup, ok := s.deletedGroups.Load(groupID)
+	if !ok {
+		return nil, nil, nil
+	}
+
+	group := s.NewGroup(groupID)
+	events := make([]nostr.Event, 0, 128)
+	for event := range s.DB.QueryEvents(nostr.Filter{
+		Kinds: nip29.ModerationEventKinds,
+		Tags:  nostr.TagMap{"h": []string{groupID}},
+	}, 50_000) {
+		if event.Kind == nostr.KindSimpleGroupDeleteGroup || event.CreatedAt > deletedGroup.DeletedAt {
+			continue
+		}
+		events = append(events, event)
+	}
+
+	for i := len(events) - 1; i >= 0; i-- {
+		act, err := nip29.PrepareModerationAction(events[i])
+		if err != nil {
+			L.Warn().Err(err).Str("group", groupID).Msg("invalid moderation action")
+			continue
+		}
+		act.Apply(&group.Group)
+	}
+
+	return group, deletedGroup, nil
 }
 
 func (s *GroupsState) GetGroupFromEvent(event nostr.Event) *Group {

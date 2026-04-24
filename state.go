@@ -30,8 +30,9 @@ type Options struct {
 }
 
 type GroupsState struct {
-	Groups     *xsync.MapOf[string, *Group]
-	AllMembers *xsync.MapOf[nostr.PubKey, int]
+	Groups        *xsync.MapOf[string, *Group]
+	AllMembers    *xsync.MapOf[nostr.PubKey, int]
+	deletedGroups *xsync.MapOf[string, *DeletedGroup]
 
 	DB       eventstore.Store
 	relayURL string
@@ -46,13 +47,14 @@ type GroupsState struct {
 
 func NewGroupsState(opts Options) *GroupsState {
 	state := &GroupsState{
-		Groups:     xsync.NewMapOf[string, *Group](),
-		AllMembers: xsync.NewMapOf[nostr.PubKey, int](),
-		DB:         opts.DB,
-		relayURL:   opts.RelayURL,
-		baseURL:    opts.BaseURL,
-		livekit:    opts.LiveKit,
-		secretKey:  opts.SecretKey,
+		Groups:        xsync.NewMapOf[string, *Group](),
+		AllMembers:    xsync.NewMapOf[nostr.PubKey, int](),
+		deletedGroups: xsync.NewMapOf[string, *DeletedGroup](),
+		DB:            opts.DB,
+		relayURL:      opts.RelayURL,
+		baseURL:       opts.BaseURL,
+		livekit:       opts.LiveKit,
+		secretKey:     opts.SecretKey,
 	}
 
 	if err := state.loadGroupsFromDB(); err != nil {

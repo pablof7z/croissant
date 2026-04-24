@@ -13,23 +13,35 @@ import (
 
 func groupHandler(w http.ResponseWriter, r *http.Request) {
 	groupID := r.PathValue("id")
-	group, ok := State.Groups.Load(groupID)
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-
-	if group.Hidden {
-		http.NotFound(w, r)
-		return
-	}
-
 	loggedUser := global.LoggedUserFromContext(r.Context())
+	group, ok := State.Groups.Load(groupID)
+	var deletedGroup *DeletedGroup
+	if !ok {
+		if loggedUser != global.S.OwnerPubKey {
+			http.NotFound(w, r)
+			return
+		}
+
+		var err error
+		group, deletedGroup, err = State.LoadDeletedGroupState(groupID)
+		if err != nil {
+			L.Error().Err(err).Str("group", groupID).Msg("failed to load deleted group state")
+			http.Error(w, "failed to load group", http.StatusInternalServerError)
+			return
+		}
+		if group == nil || deletedGroup == nil {
+			http.NotFound(w, r)
+			return
+		}
+	} else if group.Hidden {
+		http.NotFound(w, r)
+		return
+	}
 
 	count := -1
 	lastEventText := ""
 
-	if !group.Private {
+	if deletedGroup == nil && !group.Private {
 		countV, err := store.CountEvents(nostr.Filter{Tags: nostr.TagMap{"h": []string{group.Address.ID}}})
 		if err != nil {
 			L.Warn().Err(err).Str("group", group.Address.ID).Msg("failed to count group events")
@@ -49,12 +61,12 @@ func groupHandler(w http.ResponseWriter, r *http.Request) {
 		[]string{group.Address.Relay},
 	)
 
-	if err := groupPage(group, loggedUser, count, lastEventText, naddr).Render(r.Context(), w); err != nil {
+	if err := groupPage(group, deletedGroup, loggedUser, count, lastEventText, naddr).Render(r.Context(), w); err != nil {
 		L.Error().Err(err).Msg("failed to render group page")
 	}
 }
 
-templ groupPage(group *Group, loggedUser nostr.PubKey, count int, lastEventText string, naddr string) {
+templ groupPage(group *Group, deletedGroup *DeletedGroup, loggedUser nostr.PubKey, count int, lastEventText string, naddr string) {
 	@layout(group.Name) {
 		<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
 			<div class="flex gap-4">
@@ -80,6 +92,9 @@ templ groupPage(group *Group, loggedUser nostr.PubKey, count int, lastEventText 
 				}
 			</div>
 			<div class="flex flex-wrap gap-2">
+				if deletedGroup != nil {
+					<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">deleted</span>
+				}
 				if group.Private {
 					<span title="messages are only shown to authenticated members" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">private</span>
 				} else {
@@ -99,8 +114,16 @@ templ groupPage(group *Group, loggedUser nostr.PubKey, count int, lastEventText 
 					<span title="audio/video room" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-600">livekit</span>
 				}
 			</div>
+			if deletedGroup != nil {
+				<div class="text-sm text-stone-600">
+					Deleted by
+					<a href={ "https://njump.me/" + deletedGroup.DeletedBy.Hex() } target="_blank" class="text-stone-700 hover:text-stone-900 transition-colors">
+						<nostr-name pubkey={ deletedGroup.DeletedBy.Hex() }></nostr-name>
+					</a>
+				</div>
+			}
 		</div>
-		if !group.Private {
+		if deletedGroup == nil && !group.Private {
 			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 my-8">
 				<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 text-center">
 					<div class="text-2xl font-bold text-amber-600 h-8">{ fmt.Sprintf("%d", len(group.Members)) }</div>
@@ -153,18 +176,20 @@ templ groupPage(group *Group, loggedUser nostr.PubKey, count int, lastEventText 
 				</div>
 			</div>
 		}
-		<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
-			<h2 class="text-lg font-semibold text-stone-800 mb-4">Visit</h2>
-			<p class="text-xs text-stone-400 mb-4 font-mono">{ group.Address.String() }</p>
-			<div class="flex flex-wrap flex gap-4 mb-4">
-				<a href={ templ.SafeURL("nostr:" + naddr) } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">native</a>
-				<a href={ "https://web.nostrord.com/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">nostrord</a>
-				<a href={ "https://grimoire.rocks/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">grimoire.rocks</a>
-				<a href={ "https://app.flotilla.social/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">flotilla.social</a>
-				<a href={ "https://chachi.chat/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">chachi.chat</a>
+		if deletedGroup == nil {
+			<div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6">
+				<h2 class="text-lg font-semibold text-stone-800 mb-4">Visit</h2>
+				<p class="text-xs text-stone-400 mb-4 font-mono">{ group.Address.String() }</p>
+				<div class="flex flex-wrap flex gap-4 mb-4">
+					<a href={ templ.SafeURL("nostr:" + naddr) } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">native</a>
+					<a href={ "https://web.nostrord.com/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">nostrord</a>
+					<a href={ "https://grimoire.rocks/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">grimoire.rocks</a>
+					<a href={ "https://app.flotilla.social/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">flotilla.social</a>
+					<a href={ "https://chachi.chat/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">chachi.chat</a>
+				</div>
 			</div>
-		</div>
-		if loggedUser == global.S.OwnerPubKey {
+		}
+		if deletedGroup == nil && loggedUser == global.S.OwnerPubKey {
 			<div class="bg-white rounded-xl shadow-sm border border-red-200 p-6">
 				<h2 class="text-lg font-semibold text-stone-800">Danger Zone</h2>
 				<p class="text-sm text-stone-600 mt-2">Delete this group, members, and all events. This cannot be undone.</p>

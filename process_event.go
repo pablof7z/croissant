@@ -23,6 +23,7 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 
 			group = s.NewGroup(groupId)
 			s.Groups.Store(groupId, group)
+			s.deletedGroups.Delete(groupId)
 
 			groupsAffected = nostr.AppendUnique(groupsAffected, group)
 
@@ -94,8 +95,14 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 				}
 			}
 		} else if event.Kind == nostr.KindSimpleGroupDeleteGroup {
-			// when the group was deleted we just remove it
+			// when group was deleted we remove it from active map but keep deletion metadata.
+			s.deletedGroups.Store(group.Address.ID, &DeletedGroup{
+				ID:        group.Address.ID,
+				DeletedAt: event.CreatedAt,
+				DeletedBy: event.PubKey,
+			})
 			s.Groups.Delete(group.Address.ID)
+			return groupsAffected
 		}
 	}
 
