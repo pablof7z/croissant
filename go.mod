@@ -3,7 +3,7 @@ module fiatjaf.com/croissant
 go 1.25.0
 
 require (
-	fiatjaf.com/nostr v0.0.0-20260415003843-7dc553f71bd2
+	fiatjaf.com/nostr v0.0.0-20260424011647-744fb0702ced
 	github.com/a-h/templ v0.3.1001
 	github.com/blevesearch/bleve/v2 v2.4.4
 	github.com/hashicorp/golang-lru/v2 v2.0.7
@@ -20,7 +20,7 @@ require (
 	buf.build/go/protovalidate v1.1.0 // indirect
 	buf.build/go/protoyaml v0.6.0 // indirect
 	cel.dev/expr v0.25.1 // indirect
-	fiatjaf.com/lib v0.3.6 // indirect
+	fiatjaf.com/lib v0.3.7 // indirect
 	github.com/FastFilter/xorfilter v0.2.1 // indirect
 	github.com/ImVexed/fasturl v0.0.0-20230304231329-4e41488060f3 // indirect
 	github.com/PowerDNS/lmdb-go v1.9.3 // indirect
