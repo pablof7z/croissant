@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/eventstore/bleve"
 	"fiatjaf.com/nostr/eventstore/mmm"
 	"fiatjaf.com/nostr/khatru"
@@ -21,7 +22,7 @@ var staticFiles embed.FS
 var (
 	currentVersion string
 	mmmm           *mmm.MultiMmapManager
-	store          *mmm.IndexingLayer
+	store          eventstore.Store
 	L              = global.L
 	pool           = nostr.NewPool()
 

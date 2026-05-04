@@ -5,7 +5,6 @@ import (
 	"iter"
 	"slices"
 
-	"fiatjaf.com/croissant/global"
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/khatru"
 )
@@ -91,10 +90,14 @@ func hideEventFromReader(filter nostr.Filter, evt nostr.Event, authed []nostr.Pu
 
 	if group.Private {
 		// 'private' works by hiding group contents (and member lists etc), but not group metadata
-		// group metadata is still public.
-		// actually nevermind, let's make it toggleable by the person running the relay.
+		// group metadata is still public -- UNLESS the group is also marked as hidden, that's a special case
 		if evt.Kind == nostr.KindSimpleGroupMetadata {
-			if global.S.Groups.PrivateGroupsMetadataHidden {
+			if group.Hidden {
+				// still allow reading for members only
+				if group.AnyOfTheseIsAMember(authed) {
+					return false
+				}
+
 				return true
 			} else {
 				// metadata is allowed

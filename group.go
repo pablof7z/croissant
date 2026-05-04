@@ -186,31 +186,44 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event
 		group.mu.RLock()
 		defer group.mu.RUnlock()
 
-		for _, event := range [4]nostr.Event{
+		for _, updated := range [4]nostr.Event{
 			group.ToMetadataEvent(),
 			group.ToAdminsEvent(),
 			group.ToMembersEvent(),
 			group.ToRolesEvent(),
 		} {
-			event.Sign(s.secretKey)
+			// first check if we really have to update this
+			var current nostr.Event
+			for existing := range s.DB.QueryEvents(nostr.Filter{
+				Kinds:   []nostr.Kind{updated.Kind},
+				Authors: []nostr.PubKey{s.secretKey.Public()},
+				Tags:    nostr.TagMap{"d": []string{group.Address.ID}},
+			}, 1) {
+				current = existing
+			}
+			if current.Tags.Eq(updated.Tags) {
+				continue
+			}
 
-			if deleted, err := s.DB.ReplaceEvent(event); err != nil {
-				L.Error().Int("kind", int(event.Kind.Num())).Err(err).Msg("failed to save group metadata event")
+			updated.Sign(s.secretKey)
+
+			if deleted, err := s.DB.ReplaceEvent(updated); err != nil {
+				L.Error().Int("kind", int(updated.Kind.Num())).Err(err).Msg("failed to save group metadata event")
 			} else {
-				if event.Kind == nostr.KindSimpleGroupMetadata {
+				if updated.Kind == nostr.KindSimpleGroupMetadata {
 					for _, del := range deleted {
 						if err := GlobalSearchIndex.DeleteEvent(del.ID); err != nil {
-							L.Error().Int("kind", int(event.Kind.Num())).Err(err).Msg("failed to deindex group metadata event")
+							L.Error().Int("kind", int(updated.Kind.Num())).Err(err).Msg("failed to deindex group metadata event")
 						}
 					}
 				}
 
-				if err := GlobalSearchIndex.SaveEvent(event); err != nil {
-					L.Error().Int("kind", int(event.Kind.Num())).Err(err).Msg("failed to index group metadata event")
+				if err := GlobalSearchIndex.SaveEvent(updated); err != nil {
+					L.Error().Int("kind", int(updated.Kind.Num())).Err(err).Msg("failed to index group metadata event")
 				}
 			}
-			if event.CreatedAt > now-180 {
-				if !yield(event) {
+			if updated.CreatedAt > now-180 {
+				if !yield(updated) {
 					return
 				}
 			}
