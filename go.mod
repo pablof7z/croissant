@@ -3,7 +3,7 @@ module fiatjaf.com/croissant
 go 1.25.0
 
 require (
-	fiatjaf.com/nostr v0.0.0-20260504145021-61586d5d1b31
+	fiatjaf.com/nostr v0.0.0-20260508155207-03a55cc0b816
 	github.com/a-h/templ v0.3.1001
 	github.com/blevesearch/bleve/v2 v2.4.4
 	github.com/hashicorp/golang-lru/v2 v2.0.7
@@ -13,6 +13,7 @@ require (
 	github.com/pemistahl/lingua-go v1.4.0
 	github.com/puzpuzpuz/xsync/v3 v3.5.1
 	github.com/rs/zerolog v1.33.0
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
@@ -131,7 +132,6 @@ require (
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/savsgio/gotils v0.0.0-20250408102913-196191ec6287 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/templexxx/cpu v0.0.1 // indirect
 	github.com/templexxx/xhex v0.0.0-20200614015412-aed53437177b // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
