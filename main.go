@@ -53,6 +53,8 @@ func main() {
 	relayURL := global.S.RelayWSURL()
 	relay := khatru.NewRelay()
 
+	relay.Info.Software = "https://viewsource.win/fiatjaf.com/croissant"
+
 	GlobalSearchIndex = &bleve.BleveBackend{
 		Path:           filepath.Join(global.E.DataPath, "global-search"),
 		Languages:      []lingua.Language{lingua.English},
