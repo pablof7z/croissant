@@ -22,6 +22,9 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 			}
 
 			group = s.NewGroup(groupId)
+			if parent, ok := getParentFromEvent(event); ok {
+				group.Parent = parent
+			}
 			s.Groups.Store(groupId, group)
 			s.deletedGroups.Delete(groupId)
 

@@ -57,6 +57,27 @@ func rejectEvent(ctx context.Context, event nostr.Event) (reject bool, msg strin
 			return true, "restricted: missing profile in presence relays"
 		}
 
+		// croissant extension: subgroups. if a parent is declared, the parent
+		// must exist, the creator must be an admin of the parent, and the link
+		// must not form a cycle.
+		if parentId, hasParent := getParentFromEvent(event); hasParent {
+			parentGroup, ok := State.Groups.Load(parentId)
+			if !ok {
+				return true, "restricted: parent group '" + parentId + "' doesn't exist"
+			}
+
+			parentGroup.mu.RLock()
+			roles := parentGroup.Members[event.PubKey]
+			parentGroup.mu.RUnlock()
+			if !slices.ContainsFunc(roles, func(role *nip29.Role) bool { return role.Name == primaryRoleName }) {
+				return true, "restricted: must be an admin of the parent group"
+			}
+
+			if State.wouldCreateCycle(groupId, parentId) {
+				return true, "restricted: would create a parent cycle"
+			}
+		}
+
 		// here we will just create the group
 		return false, ""
 	}

@@ -25,6 +25,12 @@ type Group struct {
 	nip29.Group
 	mu sync.RWMutex
 
+	// Parent is the id of the parent group, if this group is a subgroup.
+	// It is a croissant extension to NIP-29 (discovery/namespacing only): it is
+	// set from the ["parent", <id>] tag on the kind:9007 create event and
+	// re-emitted on the kind:39000 metadata event. Guarded by mu.
+	Parent string
+
 	last50      []nostr.ID
 	last50index atomic.Int32
 
@@ -65,6 +71,9 @@ nextgroup:
 		}
 
 		group := s.NewGroup(groupId)
+		if parent, ok := getParentFromEvent(evt); ok {
+			group.Parent = parent
+		}
 		events := make([]nostr.Event, 0, 5000)
 		for event := range s.DB.QueryEvents(nostr.Filter{
 			Kinds: nip29.ModerationEventKinds,
@@ -179,6 +188,42 @@ func getGroupIDFromEvent(event nostr.Event) (string, bool) {
 	return "", false
 }
 
+// getParentFromEvent reads the croissant-specific ["parent", <group-id>] tag.
+// Tags.Find returns the first match, so multiple parent tags are first-wins.
+func getParentFromEvent(event nostr.Event) (string, bool) {
+	if t := event.Tags.Find("parent"); t != nil && len(t) >= 2 && t[1] != "" {
+		return t[1], true
+	}
+	return "", false
+}
+
+// wouldCreateCycle reports whether making parentID the parent of newID would
+// create a cycle in the parent chain (e.g. after a delete+recreate of an id).
+// It walks up from parentID following Parent links; if it reaches newID a cycle
+// would form. A bounded depth guards against malformed state.
+func (s *GroupsState) wouldCreateCycle(newID, parentID string) bool {
+	const maxDepth = 1024
+	cur := parentID
+	for i := 0; i < maxDepth; i++ {
+		if cur == newID {
+			return true
+		}
+		group, ok := s.Groups.Load(cur)
+		if !ok {
+			return false
+		}
+		group.mu.RLock()
+		next := group.Parent
+		group.mu.RUnlock()
+		if next == "" {
+			return false
+		}
+		cur = next
+	}
+	// chain too deep / likely malformed: treat as a cycle to be safe
+	return true
+}
+
 func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event] {
 	now := nostr.Now()
 
@@ -186,8 +231,15 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event
 		group.mu.RLock()
 		defer group.mu.RUnlock()
 
+		// croissant extension: re-emit the parent link on the metadata event so
+		// clients can render the subgroup hierarchy.
+		metadata := group.ToMetadataEvent()
+		if group.Parent != "" {
+			metadata.Tags = append(metadata.Tags, nostr.Tag{"parent", group.Parent})
+		}
+
 		for _, updated := range [4]nostr.Event{
-			group.ToMetadataEvent(),
+			metadata,
 			group.ToAdminsEvent(),
 			group.ToMembersEvent(),
 			group.ToRolesEvent(),
