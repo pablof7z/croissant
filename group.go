@@ -257,6 +257,20 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event
 				continue
 			}
 
+			// FIX: guarantee the regenerated roster strictly supersedes whatever is
+			// currently stored. Roster CreatedAt is copied from the triggering
+			// moderation event's timestamp (LastAdminsUpdate / LastMembersUpdate),
+			// so several adds within the same 1-second tick produce roster events
+			// with IDENTICAL CreatedAt. ReplaceEvent (mmm) then tie-breaks equal
+			// timestamps by event ID, and can DROP the newer, fuller roster — the
+			// public 39001/39002 freezes on a stale snapshot even though the relay's
+			// in-memory group.Members is correct. Bumping CreatedAt past the stored
+			// event makes IsOlder(prev,new) unconditionally true, so the freshest
+			// roster always lands.
+			if current.CreatedAt >= updated.CreatedAt {
+				updated.CreatedAt = current.CreatedAt + 1
+			}
+
 			updated.Sign(s.secretKey)
 
 			if deleted, err := s.DB.ReplaceEvent(updated); err != nil {
