@@ -49,3 +49,7 @@ when saving to a remote place you can either proxy the media downloads (default)
 support for `kind:1059` gift-wraps (NIP-17 DMs) has to be turned on.
 
 by default any messages to and from anyone will be accepted. but the same relay presence logic used for limiting group creation can be used, in which case both sender (based on `AUTH` instead of the event `pubkey`) and the receiver (based on the `"p"` tag) will be checked.
+
+## negentropy
+
+[NIP-77](https://github.com/nostr-protocol/nips/blob/master/77.md) negentropy sync is enabled by default. clients can use `NEG-OPEN` / `NEG-MSG` to efficiently reconcile their local copy of a group's events with the relay without re-downloading the full set.

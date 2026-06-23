@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"iter"
+	"math"
 	"slices"
 
 	"fiatjaf.com/nostr"
@@ -51,8 +52,12 @@ func query(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
 		}
 	} else {
 		// normal group query
+		maxLimit := 1500
+		if khatru.IsNegentropySession(ctx) {
+			maxLimit = math.MaxInt // no limit: negentropy needs the full set to build the sync vector
+		}
 		return func(yield func(nostr.Event) bool) {
-			for evt := range store.QueryEvents(filter, 1500) {
+			for evt := range store.QueryEvents(filter, maxLimit) {
 				if hideEventFromReader(filter, evt, authed) {
 					continue
 				}

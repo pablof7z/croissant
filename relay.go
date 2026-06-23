@@ -39,6 +39,8 @@ func configureRelay(relay *khatru.Relay, relayBaseURL string) error {
 	relay.Info.Self = &pk
 	relay.Info.AddSupportedNIP(29)
 
+	relay.Negentropy = true
+
 	relay.QueryStored = query
 	relay.StoreEvent = func(ctx context.Context, event nostr.Event) error {
 		return store.SaveEvent(event)
