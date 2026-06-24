@@ -77,11 +77,6 @@ func handleEventSaved(ctx context.Context, event nostr.Event) {
 		}
 	}
 
-	if group := State.GetGroupFromEvent(event); group != nil {
-		if err := group.IndexEvent(event); err != nil {
-			L.Warn().Err(err).Str("group", group.Address.ID).Msg("failed to index event")
-		}
-	}
 }
 
 func rejectRequest(

@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"fiatjaf.com/croissant/global"
 	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/eventstore/bleve"
 	"fiatjaf.com/nostr/eventstore/slicestore"
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/nip29"
@@ -25,10 +23,6 @@ func TestSubgroupMetadataEmission(t *testing.T) {
 	db := &slicestore.SliceStore{}
 	db.Init()
 	store = db
-
-	tmpDir, _ := os.MkdirTemp("", "croissant-subgroup-test")
-	defer os.RemoveAll(tmpDir)
-	GlobalSearchIndex = &bleve.BleveBackend{Path: tmpDir}
 
 	sk := nostr.Generate()
 	pk := sk.Public()

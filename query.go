@@ -19,37 +19,7 @@ func query(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
 		// and that is already authorized to read (see rejectRequest)
 		return store.QueryEvents(filter, 500)
 	} else if filter.Search != "" {
-		// search for groups
-		if len(filter.Kinds) == 1 && filter.Kinds[0] == nostr.KindSimpleGroupMetadata {
-			return func(yield func(nostr.Event) bool) {
-				for evt := range GlobalSearchIndex.QueryEvents(filter, 40) {
-					if group := State.GetGroupFromEvent(evt); group != nil {
-						if !group.Hidden || group.AnyOfTheseIsAMember(authed) {
-							if !yield(evt) {
-								return
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// search inside one or more specific groups
-		// (already gated to require between 1 and 5 group ids when searching)
-		groupIDs, _ := filter.Tags["h"]
-		return func(yield func(nostr.Event) bool) {
-			for _, groupId := range groupIDs {
-				if group, ok := State.Groups.Load(groupId); ok {
-					if !group.Private || group.AnyOfTheseIsAMember(authed) {
-						for evt := range group.SearchEvents(filter, 40) {
-							if !yield(evt) {
-								return
-							}
-						}
-					}
-				}
-			}
-		}
+		return func(yield func(nostr.Event) bool) {}
 	} else {
 		// normal group query
 		maxLimit := 1500
@@ -72,6 +42,9 @@ func query(ctx context.Context, filter nostr.Filter) iter.Seq[nostr.Event] {
 
 //go:inline
 func shouldPreventBroadcast(ws *khatru.WebSocket, filter nostr.Filter, event nostr.Event) bool {
+	if ws == nil {
+		return true
+	}
 	return hideEventFromReader(filter, event, ws.AuthedPublicKeys)
 }
 

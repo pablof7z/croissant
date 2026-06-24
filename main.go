@@ -4,14 +4,11 @@ import (
 	"embed"
 	"net"
 	"net/http"
-	"path/filepath"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
-	"fiatjaf.com/nostr/eventstore/bleve"
 	"fiatjaf.com/nostr/eventstore/mmm"
 	"fiatjaf.com/nostr/khatru"
-	"github.com/pemistahl/lingua-go"
 
 	"fiatjaf.com/croissant/global"
 )
@@ -25,8 +22,6 @@ var (
 	store          eventstore.Store
 	L              = global.L
 	pool           = nostr.NewPool()
-
-	GlobalSearchIndex *bleve.BleveBackend
 )
 
 func loggedUserMiddleware(next http.Handler) http.Handler {
@@ -47,23 +42,11 @@ func main() {
 	}
 	defer mmmm.Close()
 
-	detector = lingua.NewLanguageDetectorBuilder().FromLanguages(bleve.SupportedLanguages...).Build()
-
 	relayBaseURL := global.S.RelayBaseURL()
 	relayURL := global.S.RelayWSURL()
 	relay := khatru.NewRelay()
 
 	relay.Info.Software = "https://viewsource.win/fiatjaf.com/croissant"
-
-	GlobalSearchIndex = &bleve.BleveBackend{
-		Path:           filepath.Join(global.E.DataPath, "global-search"),
-		Languages:      []lingua.Language{lingua.English},
-		IndexableKinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
-		RawEventStore:  store,
-	}
-	if err := GlobalSearchIndex.Init(); err != nil {
-		L.Fatal().Err(err).Msg("failed to initialize global search")
-	}
 
 	State = NewGroupsState(Options{
 		DB:        store,

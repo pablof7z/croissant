@@ -2,8 +2,6 @@ package main
 
 import (
 	"net/http"
-	"os"
-	"path/filepath"
 
 	"fiatjaf.com/nostr"
 
@@ -53,14 +51,6 @@ func wipeGroupHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	group.mu.RUnlock()
-
-	if group.searchIndex != nil {
-		group.searchIndex.Close()
-	}
-	indexPath := filepath.Join(global.E.DataPath, "search", groupID)
-	if err := os.RemoveAll(indexPath); err != nil {
-		L.Warn().Err(err).Str("path", indexPath).Msg("failed to remove group search index")
-	}
 
 	State.Groups.Delete(groupID)
 
