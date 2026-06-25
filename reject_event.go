@@ -78,7 +78,11 @@ func rejectEvent(ctx context.Context, event nostr.Event) (reject bool, msg strin
 			}
 		}
 
-		// here we will just create the group
+		// Eagerly register a placeholder so concurrent events for this group
+		// don't race against the async handleEventSaved → ProcessEvent path.
+		// ProcessEvent will overwrite with the fully-initialized group shortly after.
+		placeholder := State.NewGroup(groupId)
+		State.Groups.Store(groupId, placeholder)
 		return false, ""
 	}
 
