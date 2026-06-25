@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -83,6 +84,13 @@ func (rl *Relay) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ticker := time.NewTicker(rl.PingPeriod)
+
+	// pendingMsgs tracks how many message-handler goroutines are in-flight for
+	// this connection. If a client floods us with messages, goroutines pile up
+	// competing for clientsMutex. Closing the connection when the count exceeds
+	// the limit stops the flood; context-aware locking then drains the backlog.
+	var pendingMsgs atomic.Int32
+	const maxPendingMsgs = 1000
 
 	// NIP-42 challenge
 	challenge := make([]byte, 8)
@@ -163,7 +171,14 @@ func (rl *Relay) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 			// this is safe because ReadMessage() will always create a new slice
 			message := unsafe.String(unsafe.SliceData(msgb), len(msgb))
 
+			if pendingMsgs.Add(1) > maxPendingMsgs {
+				// This connection is flooding us; kill it.
+				pendingMsgs.Add(-1)
+				kill()
+				return
+			}
 			go func(message string) {
+				defer pendingMsgs.Add(-1)
 				envelope, err := nostr.ParseMessage(message)
 				if err != nil {
 					if err == nostr.UnknownLabel && rl.Negentropy {

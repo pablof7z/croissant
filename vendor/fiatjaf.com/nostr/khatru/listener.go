@@ -321,8 +321,14 @@ func (rl *Relay) addListener(
 // remove a specific subscription id from listeners for a given ws client
 // and cancel its specific context
 func (rl *Relay) removeListenerId(ws *WebSocket, id string) {
-	rl.clientsMutex.Lock()
-	defer rl.clientsMutex.Unlock()
+	// Use select so this can be cancelled when the connection closes, preventing
+	// thousands of goroutines from piling up on the mutex when a client spams CLOSE.
+	select {
+	case <-rl.clientsMutex.C():
+		defer rl.clientsMutex.Unlock()
+	case <-ws.Context.Done():
+		return
+	}
 
 	if specs, ok := rl.clients[ws]; ok {
 		kept := specs[:0]
