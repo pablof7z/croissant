@@ -4,6 +4,7 @@ import (
 	"embed"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
@@ -69,6 +70,12 @@ func main() {
 	global.ResetRelay = func() error {
 		return resetRelay(relayHandler)
 	}
+
+	go func() {
+		if err := http.ListenAndServe("127.0.0.1:3337", nil); err != nil {
+			L.Error().Err(err).Msg("pprof server error")
+		}
+	}()
 
 	addr := net.JoinHostPort(global.E.Host, global.E.Port)
 	L.Printf("listening on http://%s", addr)
