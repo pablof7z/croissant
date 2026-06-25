@@ -171,11 +171,34 @@ func (rl *Relay) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 			// this is safe because ReadMessage() will always create a new slice
 			message := unsafe.String(unsafe.SliceData(msgb), len(msgb))
 
-			if pendingMsgs.Add(1) > maxPendingMsgs {
+			cur := pendingMsgs.Add(1)
+			if cur > maxPendingMsgs {
 				// This connection is flooding us; kill it.
 				pendingMsgs.Add(-1)
+				msg := message
+				if len(msg) > 300 {
+					msg = msg[:300] + "…"
+				}
+				rl.Log.Printf("[flood-kill] ip=%s ua=%q pending=%d last_msg=%s\n",
+					GetIPFromRequest(r),
+					r.Header.Get("User-Agent"),
+					cur,
+					msg,
+				)
 				kill()
 				return
+			} else if cur == maxPendingMsgs/2 {
+				// Warn at 50% threshold so you can see who is building up.
+				msg := message
+				if len(msg) > 300 {
+					msg = msg[:300] + "…"
+				}
+				rl.Log.Printf("[flood-warn] ip=%s ua=%q pending=%d sample_msg=%s\n",
+					GetIPFromRequest(r),
+					r.Header.Get("User-Agent"),
+					cur,
+					msg,
+				)
 			}
 			go func(message string) {
 				defer pendingMsgs.Add(-1)
