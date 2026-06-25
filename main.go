@@ -43,6 +43,10 @@ func main() {
 	}
 	defer mmmm.Close()
 
+	if err := initEventLog(); err != nil {
+		L.Warn().Err(err).Msg("event log disabled")
+	}
+
 	relayBaseURL := global.S.RelayBaseURL()
 	relayURL := global.S.RelayWSURL()
 	relay := khatru.NewRelay()

@@ -53,7 +53,11 @@ func configureRelay(relay *khatru.Relay, relayBaseURL string) error {
 		return store.DeleteEvent(id)
 	}
 
-	relay.OnEvent = rejectEvent
+	relay.OnEvent = func(ctx context.Context, event nostr.Event) (reject bool, msg string) {
+		reject, msg = rejectEvent(ctx, event)
+		logEvent(ctx, event, !reject, msg)
+		return
+	}
 	relay.OnEventSaved = handleEventSaved
 	relay.OnRequest = rejectRequest
 	relay.PreventBroadcast = shouldPreventBroadcast
