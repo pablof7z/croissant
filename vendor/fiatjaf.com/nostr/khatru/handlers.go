@@ -172,33 +172,31 @@ func (rl *Relay) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 			message := unsafe.String(unsafe.SliceData(msgb), len(msgb))
 
 			cur := pendingMsgs.Add(1)
-			if cur > maxPendingMsgs {
-				// This connection is flooding us; kill it.
-				pendingMsgs.Add(-1)
-				msg := message
-				if len(msg) > 300 {
-					msg = msg[:300] + "…"
+			if cur > maxPendingMsgs || cur == maxPendingMsgs/2 {
+				label := "[flood-warn]"
+				if cur > maxPendingMsgs {
+					label = "[flood-kill]"
+					pendingMsgs.Add(-1)
 				}
-				rl.Log.Printf("[flood-kill] ip=%s ua=%q pending=%d last_msg=%s\n",
+				// Parse just enough to extract verb and subscription ID.
+				verb, subID := floodMsgSummary(message)
+				msg := message
+				if len(msg) > 400 {
+					msg = msg[:400] + "…"
+				}
+				rl.Log.Printf("%s ip=%s ua=%q pending=%d verb=%s sub=%q raw=%s\n",
+					label,
 					GetIPFromRequest(r),
 					r.Header.Get("User-Agent"),
 					cur,
+					verb,
+					subID,
 					msg,
 				)
-				kill()
-				return
-			} else if cur == maxPendingMsgs/2 {
-				// Warn at 50% threshold so you can see who is building up.
-				msg := message
-				if len(msg) > 300 {
-					msg = msg[:300] + "…"
+				if label == "[flood-kill]" {
+					kill()
+					return
 				}
-				rl.Log.Printf("[flood-warn] ip=%s ua=%q pending=%d sample_msg=%s\n",
-					GetIPFromRequest(r),
-					r.Header.Get("User-Agent"),
-					cur,
-					msg,
-				)
 			}
 			go func(message string) {
 				defer pendingMsgs.Add(-1)
@@ -480,4 +478,42 @@ func (rl *Relay) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
+}
+
+// floodMsgSummary extracts the verb (REQ/CLOSE/EVENT/etc.) and subscription ID
+// from a raw nostr message string without full JSON parsing.
+// Message format: ["VERB","sub-id",...] or ["VERB",...] for EVENTs.
+func floodMsgSummary(msg string) (verb, subID string) {
+	// Trim leading whitespace and opening bracket.
+	s := strings.TrimSpace(msg)
+	if len(s) < 2 || s[0] != '[' {
+		return "?", ""
+	}
+	s = s[1:]
+	// Find the verb string.
+	q1 := strings.Index(s, `"`)
+	if q1 < 0 {
+		return "?", ""
+	}
+	s = s[q1+1:]
+	q2 := strings.Index(s, `"`)
+	if q2 < 0 {
+		return "?", ""
+	}
+	verb = s[:q2]
+	s = s[q2+1:]
+	// For REQ and CLOSE the second element is the subscription ID.
+	if verb != "REQ" && verb != "CLOSE" {
+		return verb, ""
+	}
+	c := strings.Index(s, `"`)
+	if c < 0 {
+		return verb, ""
+	}
+	s = s[c+1:]
+	c2 := strings.Index(s, `"`)
+	if c2 < 0 {
+		return verb, ""
+	}
+	return verb, s[:c2]
 }
