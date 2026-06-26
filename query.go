@@ -50,12 +50,22 @@ func shouldPreventBroadcast(ws *khatru.WebSocket, filter nostr.Filter, event nos
 
 //go:inline
 func hideEventFromReader(filter nostr.Filter, evt nostr.Event, authed []nostr.PubKey) bool {
+	// kind:0 events are relay-level (no group), always visible
+	if evt.Kind == nostr.KindProfileMetadata {
+		return false
+	}
+
 	group := State.GetGroupFromEvent(evt)
 	if nil == group {
 		return true
 	}
 
-	if group.Hidden {
+	group.mu.RLock()
+	hidden := group.Hidden
+	private := group.Private
+	group.mu.RUnlock()
+
+	if hidden {
 		// 'hidden' works only by hiding the group from abrangent queries like listing all groups in a relay etc
 		if requestedGroupIds(filter) == nil && filter.IDs == nil {
 			return true
@@ -66,11 +76,11 @@ func hideEventFromReader(filter nostr.Filter, evt nostr.Event, authed []nostr.Pu
 		// <pass>
 	}
 
-	if group.Private {
+	if private {
 		// 'private' works by hiding group contents (and member lists etc), but not group metadata
 		// group metadata is still public -- UNLESS the group is also marked as hidden, that's a special case
 		if evt.Kind == nostr.KindSimpleGroupMetadata {
-			if group.Hidden {
+			if hidden {
 				// still allow reading for members only
 				if group.AnyOfTheseIsAMember(authed) {
 					return false

@@ -31,6 +31,11 @@ func rejectEvent(ctx context.Context, event nostr.Event) (reject bool, msg strin
 		return rejectGiftWrapEvent(ctx, event)
 	}
 
+	// kind:0 profile metadata events are stored at the relay level, not per-group
+	if event.Kind == nostr.KindProfileMetadata {
+		return false, ""
+	}
+
 	htag := event.Tags.Find("h")
 	if htag == nil {
 		// events always need an "h" tag
