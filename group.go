@@ -119,7 +119,9 @@ nextgroup:
 
 	for _, group := range s.Groups.Range {
 		for updated := range s.SyncGroupMetadataEvents(group) {
-			global.R.BroadcastEvent(updated)
+			if global.R != nil {
+				global.R.BroadcastEvent(updated)
+			}
 		}
 	}
 
