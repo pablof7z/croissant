@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru"
 
 	"fiatjaf.com/croissant/global"
@@ -43,7 +44,18 @@ func configureRelay(relay *khatru.Relay, relayBaseURL string) error {
 
 	relay.QueryStored = query
 	relay.StoreEvent = func(ctx context.Context, event nostr.Event) error {
-		return store.SaveEvent(event)
+		err := store.SaveEvent(event)
+		if err != nil && err != eventstore.ErrDupEvent && event.Kind == nostr.KindSimpleGroupCreateGroup {
+			// reject_event.go eagerly stores a placeholder group in State.Groups
+			// as soon as the 9007 event passes validation, before it's actually
+			// persisted here. If persistence then fails, roll the placeholder
+			// back so the group isn't stuck "existing" with no snapshots and no
+			// way for a retry to ever create it.
+			if groupId, ok := getGroupIDFromEvent(event); ok {
+				State.Groups.Delete(groupId)
+			}
+		}
+		return err
 	}
 	relay.ReplaceEvent = func(ctx context.Context, event nostr.Event) error {
 		_, err := store.ReplaceEvent(event)
