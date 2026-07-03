@@ -268,6 +268,10 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event
 
 			if _, err := s.DB.ReplaceEvent(updated); err != nil {
 				L.Error().Int("kind", int(updated.Kind.Num())).Err(err).Msg("failed to save group metadata event")
+				// don't broadcast/yield a snapshot that isn't actually queryable:
+				// callers (e.g. handleEventSaved) broadcast whatever is yielded
+				// here as if it were durably stored.
+				continue
 			}
 			if updated.CreatedAt > now-180 {
 				if !yield(updated) {
