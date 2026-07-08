@@ -23,7 +23,7 @@ type Settings struct {
 	RelayContact     string          `json:"relay_contact"`
 	RelayIcon        string          `json:"relay_icon"`
 	RelaySecretKey   nostr.SecretKey `json:"relay_secret_key"`
-	OwnerPubKey      nostr.PubKey    `json:"owner_pubkey"`
+	OwnerPubKey      nostr.PubKey    `json:"-"`
 
 	Blossom struct {
 		Enabled           bool   `json:"enabled"`
