@@ -90,7 +90,7 @@ func (rl *Relay) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 	// competing for clientsMutex. Closing the connection when the count exceeds
 	// the limit stops the flood; context-aware locking then drains the backlog.
 	var pendingMsgs atomic.Int32
-	const maxPendingMsgs = 1000
+	const maxPendingMsgs = 50000
 
 	// NIP-42 challenge
 	challenge := make([]byte, 8)
