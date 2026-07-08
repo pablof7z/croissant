@@ -171,6 +171,10 @@ func (rl *Relay) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 			// this is safe because ReadMessage() will always create a new slice
 			message := unsafe.String(unsafe.SliceData(msgb), len(msgb))
 
+			if rl.OnRawMessage != nil {
+				rl.OnRawMessage(GetIPFromRequest(r), r.Header.Get("User-Agent"), message)
+			}
+
 			cur := pendingMsgs.Add(1)
 			if cur > maxPendingMsgs || cur == maxPendingMsgs/2 {
 				label := "[flood-warn]"
