@@ -220,29 +220,37 @@ func (s *GroupsState) wouldCreateCycle(newID, parentID string) bool {
 func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event] {
 	now := nostr.Now()
 
+	// Snapshot the candidate metadata events under the read lock, then RELEASE it
+	// before doing any DB work or yielding. Holding group.mu across the yield is a
+	// deadlock: the consumer (handleEventSaved) broadcasts each yielded event, and
+	// BroadcastEvent → shouldPreventBroadcast → hideEventFromReader re-acquires
+	// group.mu.RLock(); with a concurrent ProcessEvent writer queued for the write
+	// lock, Go's writer-priority RWMutex can never grant the re-entrant read, so the
+	// whole group wedges (observed live on nip29.f7z.io — see the regression test).
+	group.mu.RLock()
+	// croissant extension: re-emit the parent link on the metadata event so
+	// clients can render the subgroup hierarchy.
+	metadata := group.ToMetadataEvent()
+	if group.Parent != "" {
+		metadata.Tags = append(metadata.Tags, nostr.Tag{"parent", group.Parent})
+	}
+	candidates := [4]nostr.Event{
+		metadata,
+		group.ToAdminsEvent(),
+		group.ToMembersEvent(),
+		group.ToRolesEvent(),
+	}
+	groupID := group.Address.ID
+	group.mu.RUnlock()
+
 	return func(yield func(nostr.Event) bool) {
-		group.mu.RLock()
-		defer group.mu.RUnlock()
-
-		// croissant extension: re-emit the parent link on the metadata event so
-		// clients can render the subgroup hierarchy.
-		metadata := group.ToMetadataEvent()
-		if group.Parent != "" {
-			metadata.Tags = append(metadata.Tags, nostr.Tag{"parent", group.Parent})
-		}
-
-		for _, updated := range [4]nostr.Event{
-			metadata,
-			group.ToAdminsEvent(),
-			group.ToMembersEvent(),
-			group.ToRolesEvent(),
-		} {
+		for _, updated := range candidates {
 			// first check if we really have to update this
 			var current nostr.Event
 			for existing := range s.DB.QueryEvents(nostr.Filter{
 				Kinds:   []nostr.Kind{updated.Kind},
 				Authors: []nostr.PubKey{s.secretKey.Public()},
-				Tags:    nostr.TagMap{"d": []string{group.Address.ID}},
+				Tags:    nostr.TagMap{"d": []string{groupID}},
 			}, 1) {
 				current = existing
 			}
