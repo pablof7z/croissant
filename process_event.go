@@ -58,10 +58,15 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 			nostr.AppendUnique(groupsAffected, group)
 		}
 
-		// apply the moderation action
-		group.mu.Lock()
-		action.Apply(&group.Group)
-		group.mu.Unlock()
+		// apply the moderation action. The unlock is deferred inside its own scope
+		// so a panic in action.Apply (e.g. a malformed group with a nil Members
+		// map, where PutUser.Apply panics on `group.Members[pk] = roles`) can't
+		// leak the write lock and wedge the group forever.
+		func() {
+			group.mu.Lock()
+			defer group.mu.Unlock()
+			action.Apply(&group.Group)
+		}()
 
 		// update AllMembers counts
 		switch act := action.(type) {
