@@ -65,6 +65,18 @@ func configureRelay(relay *khatru.Relay, relayBaseURL string) error {
 		return store.DeleteEvent(id)
 	}
 
+	relay.OnRawMessage = logWireMessage
+	relay.OnConnect = func(ctx context.Context) {
+		conn := khatru.GetConnection(ctx)
+		ua := ""
+		if conn != nil {
+			ua = conn.Request.Header.Get("User-Agent")
+		}
+		logWSConnect(khatru.GetIP(ctx), ua)
+	}
+	relay.OnDisconnect = func(ctx context.Context) {
+		logWSDisconnect(khatru.GetIP(ctx))
+	}
 	relay.OnEvent = func(ctx context.Context, event nostr.Event) (reject bool, msg string) {
 		reject, msg = rejectEvent(ctx, event)
 		logEvent(ctx, event, !reject, msg)

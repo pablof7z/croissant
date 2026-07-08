@@ -25,6 +25,29 @@ var (
 	pool           = nostr.NewPool()
 )
 
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (sr *statusRecorder) WriteHeader(code int) {
+	sr.status = code
+	sr.ResponseWriter.WriteHeader(code)
+}
+
+func requestLogMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Upgrade") == "websocket" {
+			logHTTPUpgrade(r.RemoteAddr, r.URL.Path)
+			next.ServeHTTP(w, r)
+			return
+		}
+		rec := &statusRecorder{ResponseWriter: w, status: 200}
+		next.ServeHTTP(rec, r)
+		logHTTPRequest(r.RemoteAddr, r.Method, r.URL.Path, rec.status)
+	})
+}
+
 func loggedUserMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		loggedUser, _ := global.GetLoggedUser(r)
@@ -83,7 +106,7 @@ func main() {
 
 	addr := net.JoinHostPort(global.E.Host, global.E.Port)
 	L.Printf("listening on http://%s", addr)
-	handler := loggedUserMiddleware(relayHandler)
+	handler := requestLogMiddleware(loggedUserMiddleware(relayHandler))
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		L.Fatal().Err(err).Msg("server error")
 	}
