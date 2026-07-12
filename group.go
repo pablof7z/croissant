@@ -2,6 +2,7 @@ package main
 
 import (
 	"iter"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -24,6 +25,11 @@ type Group struct {
 	// set from the ["parent", <id>] tag on the kind:9007 create event and
 	// re-emitted on the kind:39000 metadata event. Guarded by mu.
 	Parent string
+	// Children is the relay-derived inverse of every live group's Parent link.
+	// A subgroup create is accepted only from a parent admin, so this projection
+	// is the parent's reciprocal consent and is emitted as kind:39000 `child`
+	// tags. Guarded by mu.
+	Children []string
 
 	last50      []nostr.ID
 	last50index atomic.Int32
@@ -49,7 +55,8 @@ func (s *GroupsState) NewGroup(id string) *Group {
 			Members:     make(map[nostr.PubKey][]*nip29.Role),
 			InviteCodes: make([]string, 0),
 		},
-		last50: make([]nostr.ID, 50),
+		Children: make([]string, 0),
+		last50:   make([]nostr.ID, 50),
 	}
 }
 
@@ -117,6 +124,20 @@ nextgroup:
 		s.deletedGroups.Delete(group.Address.ID)
 	}
 
+	// Rebuild the reciprocal parent projection from the persisted child 9007
+	// events. This makes restart a repair operation for older one-sided subgroup
+	// metadata without introducing a second durable source of hierarchy truth.
+	for _, child := range s.Groups.Range {
+		child.mu.RLock()
+		parentID := child.Parent
+		childID := child.Address.ID
+		when := child.LastMetadataUpdate
+		child.mu.RUnlock()
+		if parentID != "" {
+			s.addParentChild(parentID, childID, when)
+		}
+	}
+
 	for _, group := range s.Groups.Range {
 		for updated := range s.SyncGroupMetadataEvents(group) {
 			if global.R != nil {
@@ -126,6 +147,41 @@ nextgroup:
 	}
 
 	return nil
+}
+
+func (s *GroupsState) addParentChild(parentID, childID string, when nostr.Timestamp) (*Group, bool) {
+	parent, ok := s.Groups.Load(parentID)
+	if !ok {
+		return nil, false
+	}
+	parent.mu.Lock()
+	defer parent.mu.Unlock()
+	if slices.Contains(parent.Children, childID) {
+		return parent, false
+	}
+	parent.Children = append(parent.Children, childID)
+	if when > parent.LastMetadataUpdate {
+		parent.LastMetadataUpdate = when
+	}
+	return parent, true
+}
+
+func (s *GroupsState) removeParentChild(parentID, childID string, when nostr.Timestamp) (*Group, bool) {
+	parent, ok := s.Groups.Load(parentID)
+	if !ok {
+		return nil, false
+	}
+	parent.mu.Lock()
+	defer parent.mu.Unlock()
+	index := slices.Index(parent.Children, childID)
+	if index < 0 {
+		return parent, false
+	}
+	parent.Children = slices.Delete(parent.Children, index, index+1)
+	if when > parent.LastMetadataUpdate {
+		parent.LastMetadataUpdate = when
+	}
+	return parent, true
 }
 
 func (s *GroupsState) LoadDeletedGroupState(groupID string) (*Group, *DeletedGroup, error) {
@@ -234,6 +290,11 @@ func (s *GroupsState) SyncGroupMetadataEvents(group *Group) iter.Seq[nostr.Event
 	if group.Parent != "" {
 		metadata.Tags = append(metadata.Tags, nostr.Tag{"parent", group.Parent})
 	}
+	children := slices.Clone(group.Children)
+	slices.Sort(children)
+	for _, child := range children {
+		metadata.Tags = append(metadata.Tags, nostr.Tag{"child", child})
+	}
 	candidates := [4]nostr.Event{
 		metadata,
 		group.ToAdminsEvent(),
@@ -301,4 +362,3 @@ func (g *Group) AnyOfTheseIsAMember(pubkeys []nostr.PubKey) bool {
 	}
 	return false
 }
-

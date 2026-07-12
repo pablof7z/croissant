@@ -49,11 +49,13 @@ func TestSubgroupMetadataEmission(t *testing.T) {
 			Tags:      tags,
 		}
 		require.NoError(t, evt.Sign(sk))
+		require.NoError(t, db.SaveEvent(evt))
 		handleEventSaved(ctx, evt)
 	}
 
 	createGroup("parentG")
 	createGroup("childG", nostr.Tag{"parent", "parentG"})
+	createGroup("child2", nostr.Tag{"parent", "parentG"})
 
 	parentTagOf := func(id string) (string, bool) {
 		for evt := range query(ctx, nostr.Filter{
@@ -75,6 +77,51 @@ func TestSubgroupMetadataEmission(t *testing.T) {
 
 	_, ok = parentTagOf("parentG")
 	require.False(t, ok, "a top-level group must not carry a parent tag")
+
+	childrenOf := func(id string) []string {
+		for evt := range query(ctx, nostr.Filter{
+			Kinds: []nostr.Kind{nostr.KindSimpleGroupMetadata},
+			Tags:  nostr.TagMap{"d": {id}},
+		}) {
+			children := make([]string, 0)
+			for tag := range evt.Tags.FindAll("child") {
+				if len(tag) >= 2 {
+					children = append(children, tag[1])
+				}
+			}
+			return children
+		}
+		t.Fatalf("no metadata event found for group %q", id)
+		return nil
+	}
+
+	require.ElementsMatch(t, []string{"childG", "child2"}, childrenOf("parentG"),
+		"parent metadata should reciprocally confirm every accepted subgroup")
+
+	deleteChild := nostr.Event{
+		PubKey:    pk,
+		CreatedAt: nostr.Now(),
+		Kind:      nostr.KindSimpleGroupDeleteGroup,
+		Tags:      nostr.Tags{{"h", "childG"}},
+	}
+	require.NoError(t, deleteChild.Sign(sk))
+	require.NoError(t, db.SaveEvent(deleteChild))
+	handleEventSaved(ctx, deleteChild)
+	require.Equal(t, []string{"child2"}, childrenOf("parentG"),
+		"deleting a subgroup should remove the reciprocal parent relationship")
+
+	reloaded := &GroupsState{
+		Groups:        xsync.NewMapOf[string, *Group](),
+		AllMembers:    xsync.NewMapOf[nostr.PubKey, int](),
+		deletedGroups: xsync.NewMapOf[string, *DeletedGroup](),
+		DB:            db,
+		secretKey:     sk,
+	}
+	require.NoError(t, reloaded.loadGroupsFromDB())
+	reloadedParent, ok := reloaded.Groups.Load("parentG")
+	require.True(t, ok)
+	require.Equal(t, []string{"child2"}, reloadedParent.Children,
+		"startup should rebuild reciprocal relationships from persisted child creates")
 }
 
 // TestSubgroupCreationValidation exercises the create-time rejection rules for
