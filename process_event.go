@@ -27,6 +27,11 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 			}
 			s.Groups.Store(groupId, group)
 			s.deletedGroups.Delete(groupId)
+			if group.Parent != "" {
+				if parent, added := s.addParentChild(group.Parent, groupId, event.CreatedAt); added {
+					groupsAffected = nostr.AppendUnique(groupsAffected, parent)
+				}
+			}
 
 			groupsAffected = nostr.AppendUnique(groupsAffected, group)
 
@@ -100,6 +105,11 @@ func (s *GroupsState) ProcessEvent(ctx context.Context, event nostr.Event) (grou
 				}
 			}
 		} else if event.Kind == nostr.KindSimpleGroupDeleteGroup {
+			if group.Parent != "" {
+				if parent, removed := s.removeParentChild(group.Parent, group.Address.ID, event.CreatedAt); removed {
+					groupsAffected = nostr.AppendUnique(groupsAffected, parent)
+				}
+			}
 			// when group was deleted we remove it from active map but keep deletion metadata.
 			s.deletedGroups.Store(group.Address.ID, &DeletedGroup{
 				ID:        group.Address.ID,
