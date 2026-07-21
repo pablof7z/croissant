@@ -1,7 +1,5 @@
 .env
-static
 db
 croissant
 node_modules
-*_templ.go
 /data
