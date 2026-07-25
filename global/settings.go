@@ -122,7 +122,7 @@ func loadSettings(dataPath string) (Settings, error) {
 		}
 		settings.Groups.CreateGroupRateLimit.TokensPerInterval = 1
 		settings.Groups.CreateGroupRateLimit.IntervalSeconds = 10800
-		settings.Groups.CreateGroupRateLimit.MaxTokens = 3
+		settings.Groups.CreateGroupRateLimit.MaxTokens = 100
 		settings.Blossom.LocalPath = DefaultBlossomLocalPath
 
 		if err := settings.save(dataPath); err != nil {
