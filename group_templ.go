@@ -443,9 +443,9 @@ func groupPage(group *Group, deletedGroup *DeletedGroup, loggedUser nostr.PubKey
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var19 templ.SafeURL
-				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinURLErrs("https://grimoire.rocks/" + naddr)
+				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinURLErrs("https://grimoire.rocks/run?cmd=chat%20" + naddr)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `group.templ`, Line: 186, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `group.templ`, Line: 186, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 				if templ_7745c5c3_Err != nil {
