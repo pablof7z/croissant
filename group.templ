@@ -183,7 +183,7 @@ templ groupPage(group *Group, deletedGroup *DeletedGroup, loggedUser nostr.PubKe
 				<div class="flex flex-wrap flex gap-4 mb-4">
 					<a href={ templ.SafeURL("nostr:" + naddr) } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">native</a>
 					<a href={ "https://web.nostrord.com/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">nostrord</a>
-					<a href={ "https://grimoire.rocks/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">grimoire.rocks</a>
+					<a href={ "https://grimoire.rocks/run?cmd=chat%20" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">grimoire.rocks</a>
 					<a href={ "https://app.flotilla.social/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">flotilla.social</a>
 					<a href={ "https://chachi.chat/" + naddr } target="_blank" class="px-3 py-2 rounded-lg text-sm font-medium bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors">chachi.chat</a>
 				</div>
