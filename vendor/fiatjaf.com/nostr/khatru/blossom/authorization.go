@@ -17,7 +17,7 @@ func readAuthorization(r *http.Request) (*nostr.Event, error) {
 		return nil, nil
 	}
 
-	eventj, err := base64.StdEncoding.DecodeString(token[6:])
+	eventj, err := decodeAuthorizationToken(token[6:])
 	if err != nil {
 		return nil, fmt.Errorf("invalid base64 token")
 	}
@@ -42,4 +42,15 @@ func readAuthorization(r *http.Request) (*nostr.Event, error) {
 	}
 
 	return &evt, nil
+}
+
+func decodeAuthorizationToken(token string) ([]byte, error) {
+	eventj, err := base64.RawURLEncoding.DecodeString(token)
+	if err == nil {
+		return eventj, nil
+	}
+
+	// Deployed clients also use padded standard Base64. Accept both encodings;
+	// the decoded event still passes the same ID, signature, and expiry checks.
+	return base64.StdEncoding.DecodeString(token)
 }
