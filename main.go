@@ -1,10 +1,16 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
@@ -24,6 +30,10 @@ var (
 	L              = global.L
 	pool           = nostr.NewPool()
 )
+
+// shutdownTimeout bounds how long SIGTERM/SIGINT waits for HTTP requests to drain
+// before the store is closed anyway.
+const shutdownTimeout = 5 * time.Second
 
 type statusRecorder struct {
 	http.ResponseWriter
@@ -59,10 +69,23 @@ func loggedUserMiddleware(next http.Handler) http.Handler {
 func main() {
 	global.Init()
 
+	if err := run(); err != nil {
+		L.Fatal().Err(err).Msg("croissant stopped")
+	}
+}
+
+// run serves until SIGTERM/SIGINT and returns only after the store is closed.
+// Closing the store matters: on macOS LMDB keeps its locks in POSIX named
+// semaphores and unlinks them only in a clean mdb_env_close, so a relay that
+// dies without closing leaks them until kern.posix.sem.max is exhausted.
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	var err error
 	mmmm, store, err = initStore(global.E.DataPath)
 	if err != nil {
-		L.Fatal().Err(err).Msg("failed to initialize store")
+		return fmt.Errorf("failed to initialize store: %w", err)
 	}
 	defer mmmm.Close()
 
@@ -88,7 +111,7 @@ func main() {
 		},
 	})
 	if err := configureRelay(relay, relayBaseURL); err != nil {
-		L.Fatal().Err(err).Msg("failed to initialize relay")
+		return fmt.Errorf("failed to initialize relay: %w", err)
 	}
 
 	global.R = relay
@@ -105,9 +128,26 @@ func main() {
 	}()
 
 	addr := net.JoinHostPort(global.E.Host, global.E.Port)
-	L.Printf("listening on http://%s", addr)
-	handler := requestLogMiddleware(loggedUserMiddleware(relayHandler))
-	if err := http.ListenAndServe(addr, handler); err != nil {
-		L.Fatal().Err(err).Msg("server error")
+	server := &http.Server{
+		Addr:    addr,
+		Handler: requestLogMiddleware(loggedUserMiddleware(relayHandler)),
 	}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- server.ListenAndServe() }()
+	L.Printf("listening on http://%s", addr)
+
+	select {
+	case err := <-serveErr:
+		return fmt.Errorf("server error: %w", err)
+	case <-ctx.Done():
+	}
+	stop() // a second signal kills the process immediately
+
+	L.Info().Msg("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		L.Warn().Err(err).Msg("http shutdown incomplete, closing store anyway")
+	}
+	return nil
 }
