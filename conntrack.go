@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -33,6 +34,15 @@ func (c *trackedConn) Close() error {
 		c.closeErr = c.Conn.Close()
 	})
 	return c.closeErr
+}
+
+// ReadFrom keeps net/http's sendfile path (it type-asserts io.ReaderFrom on the
+// connection) working through the wrapper.
+func (c *trackedConn) ReadFrom(r io.Reader) (int64, error) {
+	if rf, ok := c.Conn.(io.ReaderFrom); ok {
+		return rf.ReadFrom(r)
+	}
+	return io.Copy(c.Conn, r)
 }
 
 type trackingListener struct {
