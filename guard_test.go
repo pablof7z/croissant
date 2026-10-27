@@ -223,8 +223,10 @@ func TestGuardedStoreCloseWaitsForIteration(t *testing.T) {
 	if err := <-nestedErr; !errors.Is(err, ErrStoreClosed) {
 		t.Fatalf("nested op during close: got %v, want ErrStoreClosed", err)
 	}
-	if n := <-loopDone; n != 3 {
-		t.Fatalf("iteration was cut short: %d of 3 events", n)
+	// Once Close began, the query stops yielding: an unbounded query must not
+	// outlast the close timeout.
+	if n := <-loopDone; n != 1 {
+		t.Fatalf("iteration kept yielding after Close began: %d events, want 1", n)
 	}
 	if err := <-closed; err != nil {
 		t.Fatalf("Close: %v", err)

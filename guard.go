@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"iter"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"fiatjaf.com/nostr"
@@ -34,6 +35,9 @@ type storeGate struct {
 	closed   bool
 	inflight int
 	drained  chan struct{}
+	// sealed mirrors closed for lock-free checks inside query loops, so a
+	// long query stops yielding once Close begins instead of outlasting it.
+	sealed atomic.Bool
 }
 
 func (g *storeGate) enter() bool {
@@ -62,6 +66,7 @@ func (g *storeGate) Close(timeout time.Duration) error {
 	g.mu.Lock()
 	if !g.closed {
 		g.closed = true
+		g.sealed.Store(true)
 		g.drained = make(chan struct{})
 		if g.inflight == 0 {
 			close(g.drained)
@@ -103,7 +108,9 @@ func (s *guardedStore) Close()      {}
 
 // QueryEvents holds the gate for the whole iteration, from the first pull until
 // the loop ends, breaks, or panics. If the store is already closed it yields
-// nothing.
+// nothing, and once Close begins it stops yielding: an unbounded query
+// (negentropy, wipe) must not hold the store open past the close timeout,
+// and its results would only go to connections that are being closed.
 func (s *guardedStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Seq[nostr.Event] {
 	return func(yield func(nostr.Event) bool) {
 		if !s.gate.enter() {
@@ -111,7 +118,7 @@ func (s *guardedStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Seq[n
 		}
 		defer s.gate.exit()
 		for evt := range s.inner.QueryEvents(filter, maxLimit) {
-			if !yield(evt) {
+			if s.gate.sealed.Load() || !yield(evt) {
 				return
 			}
 		}
