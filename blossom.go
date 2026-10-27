@@ -8,7 +8,7 @@ import (
 	"path"
 
 	"fiatjaf.com/nostr"
-	"fiatjaf.com/nostr/eventstore/mmm"
+	"fiatjaf.com/nostr/eventstore"
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/khatru/blossom"
 
@@ -19,20 +19,20 @@ import (
 var (
 	blossomServer  *blossom.BlossomServer
 	blossomIndex   blossom.EventStoreBlobIndexWrapper
-	blossomIndexDB *mmm.IndexingLayer
+	blossomIndexDB eventstore.Store
 	blossomFS      fs.FS
 )
 
 func initBlossom(relay *khatru.Relay, serviceURL string) error {
-	if mmmm == nil {
+	if mmmm == nil || mmmGate == nil {
 		return fmt.Errorf("blossom init requires mmm manager")
 	}
 
-	var err error
-	blossomIndexDB, err = mmmm.EnsureLayer("blossom")
+	layer, err := mmmm.EnsureLayer("blossom")
 	if err != nil {
 		return fmt.Errorf("failed to ensure blossom index: %w", err)
 	}
+	blossomIndexDB = mmmGate.guard(layer)
 
 	// init filesystem backend
 	if global.S.Blossom.S3KeyID != "" && global.S.Blossom.S3Secret != "" && global.S.Blossom.S3Bucket != "" {

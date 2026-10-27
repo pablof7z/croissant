@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -26,14 +27,19 @@ var staticFiles embed.FS
 var (
 	currentVersion string
 	mmmm           *mmm.MultiMmapManager
+	mmmGate        *storeGate
 	store          eventstore.Store
 	L              = global.L
 	pool           = nostr.NewPool()
 )
 
-// shutdownTimeout bounds how long SIGTERM/SIGINT waits for HTTP requests to drain
-// before the store is closed anyway.
-const shutdownTimeout = 5 * time.Second
+// shutdownTimeout bounds how long SIGTERM/SIGINT waits for plain HTTP requests
+// to drain. storeCloseTimeout then bounds the wait for store operations still
+// running (websocket handlers included) before mmm is closed.
+const (
+	shutdownTimeout   = 5 * time.Second
+	storeCloseTimeout = 10 * time.Second
+)
 
 type statusRecorder struct {
 	http.ResponseWriter
@@ -78,16 +84,22 @@ func main() {
 // Closing the store matters: on macOS LMDB keeps its locks in POSIX named
 // semaphores and unlinks them only in a clean mdb_env_close, so a relay that
 // dies without closing leaks them until kern.posix.sem.max is exhausted.
-func run() error {
+//
+// Shutdown order: stop accepting and drain plain HTTP, close the hijacked
+// websocket connections (Shutdown ignores them), wait for every store
+// operation still in flight, then close mmm. Closing mmm under a running
+// operation would touch unmapped memory.
+func run() (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	var err error
-	mmmm, store, err = initStore(global.E.DataPath)
+	mmmm, mmmGate, store, err = initStore(global.E.DataPath)
 	if err != nil {
 		return fmt.Errorf("failed to initialize store: %w", err)
 	}
-	defer mmmm.Close()
+	defer func() {
+		err = errors.Join(err, closeStore(mmmm, mmmGate, storeCloseTimeout))
+	}()
 
 	if err := initEventLog(); err != nil {
 		L.Warn().Err(err).Msg("event log disabled")
@@ -128,26 +140,44 @@ func run() error {
 	}()
 
 	addr := net.JoinHostPort(global.E.Host, global.E.Port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("server error: %w", err)
+	}
+	hijacked := &hijackedConns{}
 	server := &http.Server{
-		Addr:    addr,
-		Handler: requestLogMiddleware(loggedUserMiddleware(relayHandler)),
+		Handler:   requestLogMiddleware(loggedUserMiddleware(relayHandler)),
+		ConnState: hijacked.ConnState,
 	}
 	serveErr := make(chan error, 1)
-	go func() { serveErr <- server.ListenAndServe() }()
+	go func() { serveErr <- server.Serve(hijacked.Listener(ln)) }()
 	L.Printf("listening on http://%s", addr)
 
 	select {
 	case err := <-serveErr:
+		hijacked.CloseAll()
 		return fmt.Errorf("server error: %w", err)
 	case <-ctx.Done():
 	}
 	stop() // a second signal kills the process immediately
 
 	L.Info().Msg("shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	return shutdownServer(server, hijacked, shutdownTimeout)
+}
+
+// shutdownServer drains plain HTTP requests, then closes the hijacked
+// websocket connections so their handlers end and clients reconnect elsewhere.
+// A drain that times out is reported as an error so the process exits
+// non-zero instead of claiming a clean stop.
+func shutdownServer(server *http.Server, hijacked *hijackedConns, timeout time.Duration) error {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		L.Warn().Err(err).Msg("http shutdown incomplete, closing store anyway")
+	shutdownErr := server.Shutdown(shutdownCtx)
+	if n := hijacked.CloseAll(); n > 0 {
+		L.Info().Int("connections", n).Msg("closed websocket connections")
+	}
+	if shutdownErr != nil {
+		return fmt.Errorf("http shutdown incomplete: %w", shutdownErr)
 	}
 	return nil
 }

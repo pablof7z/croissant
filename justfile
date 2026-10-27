@@ -20,3 +20,9 @@ deploy target: build
     ssh root@{{target}} 'systemctl stop croissant'
     scp croissant {{target}}:croissant/croissant
     ssh root@{{target}} 'systemctl start croissant'
+
+# -race turns on checkptr, which trips on the vendored nostr package's unsafe
+# JSON writer (fiatjaf.com/nostr/event.go writeJSONString) even on master; keep
+# race detection everywhere but skip checkptr for that one package.
+test:
+    go test -race -gcflags='fiatjaf.com/nostr=-d=checkptr=0' ./...
